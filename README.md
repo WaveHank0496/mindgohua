@@ -1,4 +1,4 @@
-# mindgohua（麥溝滑）— Prototype
+# mindgohua（麥勾滑）— Prototype
 
 台語「麥溝滑」＝不要再滑了。偵測你在 Instagram / YouTube 等 app 裡的「無意識連續滑動」，用一隻全螢幕的貓打斷你。
 全程在手機上處理，app 不具備網路權限。
