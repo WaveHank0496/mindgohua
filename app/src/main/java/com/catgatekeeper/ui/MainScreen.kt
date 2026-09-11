@@ -535,7 +535,7 @@ private fun SurvivalStatusCard(survival: SurvivalState, actions: ScreenActions) 
         }
 
         Text(
-            "測試時請**拔掉 USB 線**。插著電手機不會進入深度休眠，" +
+            "測試時請拔掉 USB 線。插著電手機不會進入深度休眠，" +
                 "測出來的存活時間會過度樂觀。",
             fontSize = 12.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant,

@@ -1,5 +1,12 @@
 # Cat Gatekeeper — Prototype
 
+偵測你在 Instagram / YouTube 等 app 裡的「無意識連續滑動」，用一隻全螢幕的貓打斷你。
+全程在手機上處理，app 不具備網路權限。
+
+<p align="center">
+  <img src="docs/screenshots/overlay.jpg" width="300" alt="連續使用超過門檻後跳出的貓 overlay，兩顆按鈕在倒數結束前無法點選">
+</p>
+
 依照 [`CatGatekeeper_Spec.md`](CatGatekeeper_Spec.md) 實作的第一階段原型。
 
 Mode A（Privacy Mode）完整可用並通過實機驗收；Mode B（Focus Mode）管線已打通、
