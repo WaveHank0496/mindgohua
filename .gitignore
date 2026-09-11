@@ -1,0 +1,26 @@
+# Gradle / Kotlin
+.gradle/
+.kotlin/
+build/
+**/build/
+
+# Local SDK path — machine-specific, must not be committed
+local.properties
+
+# Android Studio / IntelliJ
+.idea/
+*.iml
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Build artifacts & signing
+*.apk
+*.aab
+*.ap_
+*.jks
+*.keystore
+
+# OS
+.DS_Store
+Thumbs.db

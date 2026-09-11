@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="120dp"
+    android:height="120dp"
+    android:viewportWidth="120"
+    android:viewportHeight="120">
+
+    <!-- 左耳 -->
+    <path
+        android:fillColor="#3D3A46"
+        android:pathData="M24,18 L47,44 L18,54 Z" />
+    <path
+        android:fillColor="#E58C8A"
+        android:pathData="M28,28 L41,43 L26,48 Z" />
+
+    <!-- 右耳 -->
+    <path
+        android:fillColor="#3D3A46"
+        android:pathData="M96,18 L73,44 L102,54 Z" />
+    <path
+        android:fillColor="#E58C8A"
+        android:pathData="M92,28 L79,43 L94,48 Z" />
+
+    <!-- 頭 -->
+    <path
+        android:fillColor="#3D3A46"
+        android:pathData="M60,32 C86,32 105,50 105,70 C105,90 86,104 60,104 C34,104 15,90 15,70 C15,50 34,32 60,32 Z" />
+
+    <!-- 眼睛（半閉，像在看你） -->
+    <path
+        android:fillColor="#F5E9C9"
+        android:pathData="M42,66 m-9,0 a9,11 0 1,0 18,0 a9,11 0 1,0 -18,0 Z" />
+    <path
+        android:fillColor="#F5E9C9"
+        android:pathData="M78,66 m-9,0 a9,11 0 1,0 18,0 a9,11 0 1,0 -18,0 Z" />
+    <path
+        android:fillColor="#22202A"
+        android:pathData="M42,66 m-3,0 a3,9 0 1,0 6,0 a3,9 0 1,0 -6,0 Z" />
+    <path
+        android:fillColor="#22202A"
+        android:pathData="M78,66 m-3,0 a3,9 0 1,0 6,0 a3,9 0 1,0 -6,0 Z" />
+
+    <!-- 鼻子 -->
+    <path
+        android:fillColor="#E58C8A"
+        android:pathData="M60,84 L53,77 L67,77 Z" />
+
+    <!-- 嘴 -->
+    <path
+        android:strokeColor="#F5E9C9"
+        android:strokeWidth="2.5"
+        android:fillColor="#00000000"
+        android:strokeLineCap="round"
+        android:pathData="M60,84 L60,90 M60,90 C56,95 50,94 48,90 M60,90 C64,95 70,94 72,90" />
+
+    <!-- 鬍鬚 -->
+    <path
+        android:strokeColor="#F5E9C9"
+        android:strokeWidth="2"
+        android:fillColor="#00000000"
+        android:strokeLineCap="round"
+        android:pathData="M46,80 L20,74 M46,86 L21,88 M74,80 L100,74 M74,86 L99,88" />
+</vector>
