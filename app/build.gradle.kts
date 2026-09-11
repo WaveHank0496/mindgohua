@@ -5,11 +5,11 @@ plugins {
 }
 
 android {
-    namespace = "com.catgatekeeper"
+    namespace = "com.mindgohua"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.catgatekeeper"
+        applicationId = "com.mindgohua"
         // 目標實機是 OPPO Reno7 5G（ColorOS on Android 11+）
         minSdk = 30
         targetSdk = 34

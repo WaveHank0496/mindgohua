@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Cat Gatekeeper</string>
-    <string name="accessibility_service_label">Cat Gatekeeper 滑動節奏偵測</string>
+    <string name="app_name">mindgohua</string>
+    <string name="accessibility_service_label">mindgohua 滑動節奏偵測</string>
     <string name="accessibility_service_description">只讀取捲動事件發生的「時間點」，用來判斷你是不是在無意識連續滑。不會讀取畫面上的文字、圖片或任何內容，也沒有網路權限。</string>
 
-    <string name="notif_channel_name">貓管家常駐</string>
+    <string name="notif_channel_name">mindgohua 常駐</string>
     <string name="notif_channel_desc">維持偵測服務存活的常駐通知（Android 要求）</string>
 </resources>

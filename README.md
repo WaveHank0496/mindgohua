@@ -1,13 +1,18 @@
-# Cat Gatekeeper — Prototype
+# mindgohua（麥溝滑）— Prototype
 
-偵測你在 Instagram / YouTube 等 app 裡的「無意識連續滑動」，用一隻全螢幕的貓打斷你。
+台語「麥溝滑」＝不要再滑了。偵測你在 Instagram / YouTube 等 app 裡的「無意識連續滑動」，用一隻全螢幕的貓打斷你。
 全程在手機上處理，app 不具備網路權限。
 
 <p align="center">
   <img src="docs/screenshots/overlay.jpg" width="300" alt="連續使用超過門檻後跳出的貓 overlay，兩顆按鈕在倒數結束前無法點選">
 </p>
 
-依照 [`CatGatekeeper_Spec.md`](CatGatekeeper_Spec.md) 實作的第一階段原型。
+> **靈感來源：** 用貓打斷滑手機的概念來自 ZOKUZOKU 的
+> [Cat Gatekeeper](https://zokuzoku.github.io/cat-gatekeeper/)（瀏覽器擴充功能 / 桌面版）。
+> 本專案是在 Android 上獨立實作的版本，沒有使用原作的程式碼或素材（貓影片、圖示、logo）；
+> app 裡的貓是專案自行繪製的向量圖。
+
+依照 [`Mindgohua_Spec.md`](Mindgohua_Spec.md) 實作的第一階段原型。
 
 Mode A（Privacy Mode）完整可用並通過實機驗收；Mode B（Focus Mode）管線已打通、
 每日計數功能實機驗證過，但**節奏參數尚未用真實使用資料校準**，UI 上標示為「實驗中」，
@@ -16,7 +21,7 @@ Mode A（Privacy Mode）完整可用並通過實機驗收；Mode B（Focus Mode�
 **spec §8 六條驗收標準全數通過**（含 ColorOS 過夜存活 9 小時零中斷）。
 實機環境：OPPO Reno7 5G（CPH2371）/ Android 13 / ColorOS，2026-07-24。
 
-> **關於開發方式：** 本專案以 AI 協作開發。規格（[`CatGatekeeper_Spec.md`](CatGatekeeper_Spec.md)）、
+> **關於開發方式：** 本專案以 AI 協作開發。規格（[`Mindgohua_Spec.md`](Mindgohua_Spec.md)）、
 > 需求取捨與實機驗收由作者負責，程式碼實作以 Claude Code 輔助完成。
 > 文件中提到的「使用者要求」，指的是作者在開發過程中提出的需求變更。
 
@@ -44,7 +49,7 @@ Mode A（Privacy Mode）完整可用並通過實機驗收；Mode B（Focus Mode�
 ## 專案結構
 
 ```
-app/src/main/java/com/catgatekeeper/
+app/src/main/java/com/mindgohua/
 ├── core/                       ← 純 Kotlin，不依賴 Android，可單元測試
 │   ├── SessionEngine.kt           計時 / 冷卻 / 門檻 / GRACE 狀態機（spec §5）
 │   ├── ScrollRhythmAnalyzer.kt    滑動節奏統計（spec §4）
@@ -142,7 +147,7 @@ app 內的隱私說明會跟著開關變動，不會留一個過期的承諾在�
 IG 有設，所以數得出來；換別的 app 不保證。UI 上有「量不到」的明確提示，
 不會在數不出來的時候顯示一個看似正常的 0。
 
-磁碟上實際的內容長這樣（`adb shell run-as com.catgatekeeper cat files/datastore/...`）：
+磁碟上實際的內容長這樣（`adb shell run-as com.mindgohua cat files/datastore/...`）：
 
 ```
 c|2026-07-23|com.instagram.android
@@ -192,8 +197,8 @@ OPPO / ColorOS 會殺掉 foreground service 且**不給任何提示**，
 
 ### 前置設定（app 內「讓貓活著」區塊有按鈕帶過去）
 
-1. 設定 → 電池 → Cat Gatekeeper → **不受限制 / 允許背景執行**
-2. 手機管家 / 安全中心 → **自啟動管理** → 允許 Cat Gatekeeper
+1. 設定 → 電池 → mindgohua → **不受限制 / 允許背景執行**
+2. 手機管家 / 安全中心 → **自啟動管理** → 允許 mindgohua
    （這個開關沒有公開 API 可查，只能靠使用者自己確認）
 3. 最近任務畫面把本 app **上鎖**，避免一鍵清理掃掉
 
@@ -201,16 +206,16 @@ OPPO / ColorOS 會殺掉 foreground service 且**不給任何提示**，
 
 ```bash
 # 1. 啟動後記錄 PID
-adb shell pidof com.catgatekeeper
+adb shell pidof com.mindgohua
 
 # 2. 每 10 分鐘檢查一次是否還活著、PID 有沒有變（變了代表被殺後重啟）
-adb shell "while true; do echo \$(date +%H:%M) \$(pidof com.catgatekeeper); sleep 600; done"
+adb shell "while true; do echo \$(date +%H:%M) \$(pidof com.mindgohua); sleep 600; done"
 
 # 3. 確認 foreground service 仍在
-adb shell dumpsys activity services com.catgatekeeper | grep -i "isForeground\|app="
+adb shell dumpsys activity services com.mindgohua | grep -i "isForeground\|app="
 
 # 4. 看是否被系統以省電理由停掉
-adb logcat -d | grep -iE "catgatekeeper|force stop|anr|killing"
+adb logcat -d | grep -iE "mindgohua|force stop|anr|killing"
 ```
 
 ### 通過條件

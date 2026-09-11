@@ -131,19 +131,19 @@ App 裡的「權限」區塊每一項都有「去開」按鈕，跟著點就好�
 
 **無障礙服務（只有 Mode B 需要）** 比較特別，建議手動開：
 
-設定 → 系統設定 → 無障礙 → 已下載的服務 → Cat Gatekeeper → 開啟
+設定 → 系統設定 → 無障礙 → 已下載的服務 → mindgohua → 開啟
 
 > 也可以用 adb 開，但那個設定值是「用冒號分隔的清單」，
 > 直接寫會蓋掉你原有的無障礙服務。除非你確定清單是空的，否則不要用：
 > ```powershell
-> adb shell settings put secure enabled_accessibility_services com.catgatekeeper/com.catgatekeeper.service.ScrollWatchService
+> adb shell settings put secure enabled_accessibility_services com.mindgohua/com.mindgohua.service.ScrollWatchService
 > adb shell settings put secure accessibility_enabled 1
 > ```
 
 ### 順手驗證「真的沒有網路權限」
 
 ```powershell
-adb shell dumpsys package com.catgatekeeper | Select-String "INTERNET"
+adb shell dumpsys package com.mindgohua | Select-String "INTERNET"
 ```
 
 **應該什麼都找不到。** 找到了就是出事了。
@@ -268,8 +268,8 @@ Mode B 比 Mode A 難測，因為它有**三段**可能斷掉。設定頁的「M
 debug build 可以用 `run-as` 讀 app 私有目錄：
 
 ```powershell
-adb shell run-as com.catgatekeeper ls -l files/datastore/
-adb shell "run-as com.catgatekeeper cat files/datastore/cat_gatekeeper_daily_stats.preferences_pb"
+adb shell run-as com.mindgohua ls -l files/datastore/
+adb shell "run-as com.mindgohua cat files/datastore/mindgohua_daily_stats.preferences_pb"
 ```
 
 輸出裡應該只有 `c|日期|package` 這種 key 加上整數。
@@ -294,8 +294,8 @@ adb shell "run-as com.catgatekeeper cat files/datastore/cat_gatekeeper_daily_sta
 
 ### 前置設定（app 內「讓貓活著」區塊有按鈕帶過去）
 
-1. 設定 → 電池 → Cat Gatekeeper → **不受限制 / 允許背景執行**
-2. 手機管家 / 安全中心 → **自啟動管理** → 允許 Cat Gatekeeper
+1. 設定 → 電池 → mindgohua → **不受限制 / 允許背景執行**
+2. 手機管家 / 安全中心 → **自啟動管理** → 允許 mindgohua
 3. 最近任務畫面把本 app **上鎖**（下拉卡片會出現鎖頭圖示）
 
 ### 測試方法：用 app 內的「存活紀錄」，不要用 adb
@@ -354,7 +354,7 @@ adb logcat -s GatekeeperService:* UsageStatsDetector:* ScrollWatchService:* Boot
 ### 看 app 有沒有當掉
 
 ```powershell
-adb logcat -d | Select-String -Pattern "catgatekeeper" -Context 5
+adb logcat -d | Select-String -Pattern "mindgohua" -Context 5
 ```
 
 當掉的話會有一大段 `FATAL EXCEPTION`，
@@ -363,13 +363,13 @@ adb logcat -d | Select-String -Pattern "catgatekeeper" -Context 5
 ### 確認 foreground service 還在
 
 ```powershell
-adb shell dumpsys activity services com.catgatekeeper
+adb shell dumpsys activity services com.mindgohua
 ```
 
 ### 重新開始（清掉所有設定）
 
 ```powershell
-adb shell pm clear com.catgatekeeper
+adb shell pm clear com.mindgohua
 ```
 
 ---

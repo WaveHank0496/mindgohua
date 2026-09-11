@@ -20,5 +20,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "CatGatekeeper"
+rootProject.name = "Mindgohua"
 include(":app")
