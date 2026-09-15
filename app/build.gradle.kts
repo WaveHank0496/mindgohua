@@ -1,7 +1,30 @@
+import java.io.FileInputStream
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
+}
+
+/**
+ * Release 簽章設定。
+ *
+ * 上架到 Google Play 的 APK 必須用一把固定的金鑰簽名，而且**這把金鑰一旦遺失，
+ * 這個 app 就永遠無法再發布更新**（Play 認的是簽章，不是帳號）。
+ *
+ * 金鑰本身（.jks）與它的密碼（keystore.properties）都被 .gitignore 排除，
+ * 絕不進版控 —— 這個 repo 是公開的。
+ *
+ * 找不到 keystore.properties 時不會讓建置失敗，只是 release 版本不簽章。
+ * 這是刻意的：CI 跟其他開發者沒有這把金鑰，但他們仍然要能建置與跑測試。
+ */
+val keystorePropertiesFile = rootProject.file("keystore.properties")
+val hasReleaseKeystore = keystorePropertiesFile.exists()
+val keystoreProperties = Properties().apply {
+    if (hasReleaseKeystore) {
+        FileInputStream(keystorePropertiesFile).use { load(it) }
+    }
 }
 
 android {
@@ -19,12 +42,26 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        create("release") {
+            if (hasReleaseKeystore) {
+                storeFile = rootProject.file(keystoreProperties.getProperty("storeFile"))
+                storePassword = keystoreProperties.getProperty("storePassword")
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         debug {
             isMinifyEnabled = false
         }
         release {
             isMinifyEnabled = false
+            // 沒有金鑰時維持不簽章，而不是退回 debug 簽章 ——
+            // debug 簽章的 APK 上傳到 Play 會被拒，而且失敗訊息很難懂。
+            signingConfig = if (hasReleaseKeystore) signingConfigs.getByName("release") else null
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }

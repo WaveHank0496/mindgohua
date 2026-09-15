@@ -21,6 +21,10 @@ captures/
 *.jks
 *.keystore
 
+# 簽章金鑰的密碼。這個檔案一旦進了 git，就算之後刪掉也還留在歷史裡，
+# 而 repo 是公開的 —— 等於把上架金鑰的密碼公開貼出去。絕對不可以追蹤。
+keystore.properties
+
 # OS
 .DS_Store
 Thumbs.db
