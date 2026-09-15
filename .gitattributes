@@ -1,0 +1,34 @@
+# 換行格式的單一事實來源。
+#
+# 為什麼需要這個檔案：
+# 這個專案在 Windows 上開發（git 的 core.autocrlf=true），CI 卻跑在 Linux 上。
+# 沒有這份設定的話，檔案存進 repo 時是 LF 還是 CRLF，取決於「誰在哪台電腦上操作」
+# —— 一個不該存在的不確定性。
+#
+# 實際踩到的坑：gradlew 是 shell script，卻以 CRLF 存進了 repo。
+# Linux 執行時讀到的直譯器是 "/bin/sh\r"，於是報錯
+#   bad interpreter: /bin/sh^M: No such file or directory
+# 這個訊息完全看不出真正的原因，可以耗掉半天。
+
+# 預設：讓 git 自行判斷哪些是文字檔，並一律以 LF 存進 repo。
+# 簽出到 Windows 時仍會依 core.autocrlf 轉成 CRLF，不影響本機編輯。
+* text=auto
+
+# ── 必須是 LF：會在 Unix 上被當成程式執行的檔案 ──
+gradlew     text eol=lf
+*.sh        text eol=lf
+
+# ── 必須是 CRLF：Windows 批次檔，換成 LF 有些情況會失效 ──
+*.bat       text eol=crlf
+*.cmd       text eol=crlf
+
+# ── 二進位檔：絕不可做任何換行轉換，否則檔案會壞掉 ──
+*.jar       binary
+*.png       binary
+*.jpg       binary
+*.jpeg      binary
+*.webp      binary
+*.apk       binary
+*.aab       binary
+*.jks       binary
+*.keystore  binary
