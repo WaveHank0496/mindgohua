@@ -98,13 +98,9 @@ class CrashLog(private val context: Context) {
 
     private fun appVersion(): String = runCatching {
         val pkg = context.packageManager.getPackageInfo(context.packageName, 0)
-        val code = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            pkg.longVersionCode
-        } else {
-            @Suppress("DEPRECATION")
-            pkg.versionCode.toLong()
-        }
-        "${pkg.versionName} ($code)"
+        // longVersionCode 自 API 28 起存在，而本專案 minSdk 是 30，
+        // 所以不需要版本判斷 —— 原本寫的那個分支永遠跑不到（lint: ObsoleteSdkInt）。
+        "${pkg.versionName} (${pkg.longVersionCode})"
     }.getOrElse { "unknown" }
 
     companion object {
