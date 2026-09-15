@@ -2,6 +2,7 @@ package com.mindgohua.ui
 
 import android.Manifest
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -9,6 +10,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.lifecycle.lifecycleScope
 import com.mindgohua.core.InterruptReason
+import com.mindgohua.diagnostics.CrashLog
 import com.mindgohua.overlay.OverlayController
 import com.mindgohua.service.GatekeeperService
 import com.mindgohua.settings.AppSettings
@@ -17,15 +19,21 @@ import com.mindgohua.settings.SettingsStore
 import com.mindgohua.stats.DailyStatsStore
 import com.mindgohua.stats.SurvivalLog
 import com.mindgohua.util.Permissions
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 class MainActivity : ComponentActivity() {
 
     private lateinit var store: SettingsStore
     private lateinit var stats: DailyStatsStore
     private lateinit var survival: SurvivalLog
+    private lateinit var crashLog: CrashLog
 
     /**
      * 驗收用的預覽 overlay。刻意不走 GatekeeperService ——
@@ -37,14 +45,34 @@ class MainActivity : ComponentActivity() {
     /** 權限狀態不會用 Flow 通知，只能在每次回到前景時重新查一次。 */
     private val permissionState = MutableStateFlow(PermissionState())
 
+    /** 當機紀錄的數量。同樣沒有 Flow 可訂閱，回到前景時重查。 */
+    private val diagnosticsState = MutableStateFlow(DiagnosticsState())
+
     private val notificationPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { refreshPermissions() }
+
+    /**
+     * 匯出當機紀錄。
+     *
+     * 刻意用系統的「建立文件」選擇器，而不是分享選單：
+     *  - 由使用者自己決定檔案存到哪裡，app 不經手、也看不到其他檔案
+     *  - 不需要任何儲存空間權限
+     *  - 沒有「直接傳給某個 app」這種捷徑
+     *
+     * 這跟「沒有網路權限」是同一個姿態：資料要離開這台手機，
+     * 必須是使用者自己動手，而不是程式替他決定。
+     */
+    private val exportDiagnosticsLauncher =
+        registerForActivityResult(ActivityResultContracts.CreateDocument("text/plain")) { uri ->
+            if (uri != null) writeDiagnosticsTo(uri)
+        }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         store = SettingsStore(applicationContext)
         stats = DailyStatsStore(applicationContext)
         survival = SurvivalLog(applicationContext)
+        crashLog = CrashLog(applicationContext)
         val actions = buildActions()
 
         setContent {
@@ -54,6 +82,7 @@ class MainActivity : ComponentActivity() {
                     permissionsFlow = permissionState,
                     dailyTotalsFlow = stats.dailyTotals,
                     survivalFlow = survival.state,
+                    diagnosticsFlow = diagnosticsState,
                     actions = actions,
                 )
             }
@@ -63,6 +92,7 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         refreshPermissions()
+        refreshDiagnostics()
         resumeServiceIfEnabled()
     }
 
@@ -92,6 +122,13 @@ class MainActivity : ComponentActivity() {
         )
     }
 
+    private fun refreshDiagnostics() {
+        lifecycleScope.launch {
+            val count = withContext(Dispatchers.IO) { crashLog.reports().size }
+            diagnosticsState.value = DiagnosticsState(reportCount = count)
+        }
+    }
+
     private fun buildActions() = ScreenActions(
         onToggleEnabled = { enabled ->
             lifecycleScope.launch {
@@ -117,7 +154,36 @@ class MainActivity : ComponentActivity() {
         onTestFocusInterrupt = { showPreviewOverlay(InterruptReason.SCROLL_RHYTHM) },
         onClearStats = { lifecycleScope.launch { stats.clearAll() } },
         onResetSurvival = { lifecycleScope.launch { survival.reset() } },
+        onExportDiagnostics = {
+            val stamp = SimpleDateFormat("yyyyMMdd-HHmm", Locale.US).format(Date())
+            runCatching { exportDiagnosticsLauncher.launch("mindgohua-診斷紀錄-$stamp.txt") }
+        },
+        onClearDiagnostics = {
+            lifecycleScope.launch {
+                withContext(Dispatchers.IO) { crashLog.clear() }
+                refreshDiagnostics()
+            }
+        },
     )
+
+    /**
+     * 把當機紀錄寫進使用者選定的位置。
+     *
+     * 失敗時不彈錯誤：這是診斷功能，不該在使用者已經遇到問題的時候
+     * 再丟第二個錯誤訊息給他。寫不出去就是沒寫出去，紀錄仍留在本機。
+     */
+    private fun writeDiagnosticsTo(uri: Uri) {
+        lifecycleScope.launch {
+            withContext(Dispatchers.IO) {
+                runCatching {
+                    val text = crashLog.readAll()
+                    contentResolver.openOutputStream(uri)?.use { out ->
+                        out.write(text.toByteArray(Charsets.UTF_8))
+                    }
+                }
+            }
+        }
+    }
 
     private fun showPreviewOverlay(reason: InterruptReason) {
         lifecycleScope.launch {
@@ -151,6 +217,11 @@ data class PermissionState(
     val accessibility: Boolean = false,
 )
 
+/** 本機診斷紀錄的狀態。目前只有數量 —— 內容不進記憶體，要看就匯出。 */
+data class DiagnosticsState(
+    val reportCount: Int = 0,
+)
+
 data class ScreenActions(
     val onToggleEnabled: (Boolean) -> Unit,
     val onSettingsChange: (suspend (SettingsStore) -> Unit) -> Unit,
@@ -164,6 +235,8 @@ data class ScreenActions(
     val onTestFocusInterrupt: () -> Unit,
     val onClearStats: () -> Unit,
     val onResetSurvival: () -> Unit,
+    val onExportDiagnostics: () -> Unit,
+    val onClearDiagnostics: () -> Unit,
 )
 
 /** 開關能不能打開：Mode A 需要 usage access + overlay；Mode B 多要無障礙。 */
