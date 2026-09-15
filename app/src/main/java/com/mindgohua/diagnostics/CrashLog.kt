@@ -1,7 +1,6 @@
 package com.mindgohua.diagnostics
 
 import android.content.Context
-import android.content.pm.PackageManager
 import android.os.Build
 import java.io.File
 import java.io.PrintWriter
@@ -37,6 +36,16 @@ import java.util.Locale
  *
  * `filesDir/diagnostics/`，也就是 app 私有目錄：其他 app 讀不到，
  * 解除安裝時跟著消失，不需要任何儲存空間權限。
+ *
+ * ## 為什麼檔案操作都在 companion object 裡
+ *
+ * 寫入、輪替、讀取、清除全部抽成只吃 [File] 的函式，不碰 [Context]。
+ * 這讓它們可以用**一般單元測試**驗證（不需要手機、不需要模擬器），
+ * 見 `CrashLogWriteTest`。
+ *
+ * 這一點很重要：原本看起來「要驗證就得讓 app 故意崩潰」，
+ * 但崩潰只是觸發條件，真正要驗的是檔案有沒有被正確寫出來 ——
+ * 而那件事根本不需要 Android。
  */
 class CrashLog(private val context: Context) {
 
@@ -59,27 +68,16 @@ class CrashLog(private val context: Context) {
     }
 
     /** 由新到舊。 */
-    fun reports(): List<File> =
-        dir.listFiles()?.filter { it.isFile }?.sortedByDescending { it.name } ?: emptyList()
+    fun reports(): List<File> = reportsIn(dir)
 
     fun hasReports(): Boolean = reports().isNotEmpty()
 
     /** 把所有紀錄串成一份可匯出的純文字。 */
-    fun readAll(): String {
-        val files = reports()
-        if (files.isEmpty()) return ""
-        return files.joinToString("\n\n${"=".repeat(60)}\n\n") {
-            runCatching { it.readText() }.getOrElse { e -> "（讀取失敗：$e）" }
-        }
-    }
+    fun readAll(): String = readAllIn(dir)
 
-    fun clear() {
-        runCatching { dir.listFiles()?.forEach { it.delete() } }
-    }
+    fun clear() = clearIn(dir)
 
     private fun write(thread: Thread, throwable: Throwable) {
-        if (!dir.exists() && !dir.mkdirs()) return
-
         val stack = StringWriter().also { sw ->
             PrintWriter(sw).use { throwable.printStackTrace(it) }
         }.toString()
@@ -95,16 +93,7 @@ class CrashLog(private val context: Context) {
             stackTrace = stack,
         )
 
-        val stamp = SimpleDateFormat(FILE_STAMP_PATTERN, Locale.US).format(Date())
-        File(dir, "crash-$stamp.txt").writeText(text)
-        prune()
-    }
-
-    /** 只留最近 [MAX_REPORTS] 份。舊的當機通常已經修掉了，留著只是佔空間。 */
-    private fun prune() {
-        val files = reports()
-        if (files.size <= MAX_REPORTS) return
-        files.drop(MAX_REPORTS).forEach { runCatching { it.delete() } }
+        writeInto(dir, text, stamp(System.currentTimeMillis()))
     }
 
     private fun appVersion(): String = runCatching {
@@ -121,11 +110,18 @@ class CrashLog(private val context: Context) {
     companion object {
         const val DIR_NAME = "diagnostics"
 
-        /** 保留幾份當機紀錄。 */
+        /** 保留幾份當機紀錄。舊的通常已經修掉了，留著只是佔空間。 */
         const val MAX_REPORTS = 10
+
+        /** 多份紀錄串接時的分隔線。 */
+        internal val SEPARATOR = "\n\n${"=".repeat(60)}\n\n"
 
         private const val FILE_STAMP_PATTERN = "yyyyMMdd-HHmmss-SSS"
         private const val DISPLAY_STAMP_PATTERN = "yyyy-MM-dd HH:mm:ss"
+
+        /** 檔名用的時間戳。排序靠它，所以格式必須是「字典序 == 時間序」。 */
+        internal fun stamp(whenMs: Long): String =
+            SimpleDateFormat(FILE_STAMP_PATTERN, Locale.US).format(Date(whenMs))
 
         /**
          * 產生一份當機報告的文字內容。
@@ -155,6 +151,50 @@ class CrashLog(private val context: Context) {
             appendLine("執行緒　　：$threadName")
             appendLine("-".repeat(60))
             appendLine(stackTrace.trimEnd())
+        }
+
+        // ---- 以下純檔案操作，不依賴 Android，可用一般單元測試驗證 ----
+
+        /** 由新到舊。檔名含時間戳，所以字典序倒排就是時間倒序。 */
+        internal fun reportsIn(dir: File): List<File> =
+            dir.listFiles()?.filter { it.isFile }?.sortedByDescending { it.name } ?: emptyList()
+
+        /**
+         * 寫一份紀錄並順手輪替。
+         *
+         * @return 寫出的檔案；目錄建不起來或寫入失敗時回傳 null。
+         *   這個函式是在「app 正在當掉」的路徑上被呼叫的，所以絕對不能丟例外。
+         */
+        internal fun writeInto(
+            dir: File,
+            text: String,
+            stamp: String,
+            keep: Int = MAX_REPORTS,
+        ): File? = runCatching {
+            if (!dir.exists() && !dir.mkdirs()) return null
+            val file = File(dir, "crash-$stamp.txt")
+            file.writeText(text)
+            pruneIn(dir, keep)
+            file
+        }.getOrNull()
+
+        /** 只留最近 [keep] 份。 */
+        internal fun pruneIn(dir: File, keep: Int = MAX_REPORTS) {
+            val files = reportsIn(dir)
+            if (files.size <= keep) return
+            files.drop(keep).forEach { runCatching { it.delete() } }
+        }
+
+        internal fun readAllIn(dir: File): String {
+            val files = reportsIn(dir)
+            if (files.isEmpty()) return ""
+            return files.joinToString(SEPARATOR) { file ->
+                runCatching { file.readText() }.getOrElse { e -> "（讀取失敗：$e）" }
+            }
+        }
+
+        internal fun clearIn(dir: File) {
+            runCatching { dir.listFiles()?.forEach { it.delete() } }
         }
     }
 }
