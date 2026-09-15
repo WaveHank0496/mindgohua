@@ -54,9 +54,17 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      # 接受 SDK 授權並備妥 cmdline-tools，讓 AGP 能自動補齊缺少的 SDK 元件。
-      - name: 準備 Android SDK
-        uses: android-actions/setup-android@v3
+      # 這裡原本有一步 android-actions/setup-android@v3，用來「確保」Android SDK 就緒。
+      # 它是整條 CI 唯一失敗的一步（run 35005294149），而且失敗原因是它自己的問題：
+      # v3 以 node20 執行（GitHub 正在汰除），且預設安裝的 packages 含有 'tools' ——
+      # 這個 SDK 套件早已從 Android 倉庫移除，新版 sdkmanager 找不到它。
+      #
+      # 移除而不是升級到 v4：GitHub 的 ubuntu runner 本來就預裝 Android SDK，
+      # 授權也已接受，這個專案並不需要額外安裝。當初加它是為了防範一個假想問題，
+      # 結果製造了一個真實問題。少一個依賴就少一個會壞的東西。
+      #
+      # 如果之後 Gradle 步驟真的因為缺少 SDK 元件而失敗，那就是它確實需要的證據，
+      # 屆時再用 android-actions/setup-android@v4 加回來。
 
       # 快取 Gradle 的下載與建置產物。第一次會慢（約 5 分鐘），之後約 2 分鐘。
       - name: 設定 Gradle
