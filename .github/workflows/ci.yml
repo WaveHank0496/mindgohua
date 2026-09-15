@@ -14,8 +14,16 @@
 name: CI
 
 on:
+  # 每個分支的 push 都跑，不只 main。
+  #
+  # 理由：一人開發時，你會想在「還沒開 PR」的階段就知道東西有沒有壞，
+  # 而不是等到要合併了才發現。這個 repo 是公開的，而公開 repo 的
+  # GitHub Actions 額度沒有上限，所以多跑幾次不花錢。
+  #
+  # 代價是 PR 分支會跑兩次（push 一次、pull_request 一次）。
+  # 以目前的規模這點浪費換到「早點知道壞了」很划算。
   push:
-    branches: [main]
+    branches: ['**']
   pull_request:
     branches: [main]
   # 允許在 GitHub 網頁上手動按按鈕觸發，debug CI 本身時很有用。
