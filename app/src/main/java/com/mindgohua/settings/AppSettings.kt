@@ -88,8 +88,19 @@ object TargetApps {
     const val X = "com.twitter.android"
     const val REDDIT = "com.reddit.frontpage"
 
-    /** Prototype 的可選清單。spec 只要求 IG / YouTube，其餘是順手加的。 */
-    val selectable: List<Pair<String, String>> = listOf(
+    /**
+     * 幾個常見 app 的中文顯示名。
+     *
+     * **這不再是「可選清單」** —— 使用者現在可以挑手機上任何有桌面圖示的 app
+     * （見 [InstalledApps]）。這份表只負責兩件事：
+     *
+     * 1. 當我們手上只有套件名、拿不到 PackageManager 時（例如 overlay 的
+     *    繪製路徑），還能顯示一個人看得懂的名字。
+     * 2. 幾個名稱容易混淆的（TikTok 國際版、X / Twitter）給一個明確的說法。
+     *
+     * 查不到就回傳套件名本身 —— 醜，但至少是真的，不會騙人。
+     */
+    private val knownLabels: Map<String, String> = mapOf(
         INSTAGRAM to "Instagram",
         YOUTUBE to "YouTube",
         TIKTOK to "TikTok",
@@ -99,6 +110,16 @@ object TargetApps {
         REDDIT to "Reddit",
     )
 
-    fun labelOf(packageName: String?): String =
-        selectable.firstOrNull { it.first == packageName }?.second ?: (packageName ?: "這個 app")
+    /**
+     * 套件名 → 顯示名稱。
+     *
+     * @param resolved 由呼叫端提供的名稱（通常來自 PackageManager，會跟著
+     *   使用者的系統語言走）。有值就優先用它 —— 系統給的名字永遠比我們
+     *   寫死的表準確，而且涵蓋所有 app，不只表裡這幾個。
+     */
+    fun labelOf(packageName: String?, resolved: String? = null): String =
+        resolved?.takeIf { it.isNotBlank() }
+            ?: knownLabels[packageName]
+            ?: packageName
+            ?: "這個 app"
 }
