@@ -2,8 +2,10 @@ package com.mindgohua.settings
 
 import com.mindgohua.settings.InstalledApps.AppEntry
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.io.File
 
 /**
  * app 挑選頁的排序與搜尋行為。
@@ -136,6 +138,32 @@ class InstalledAppsTest {
         val entries = listOf(entry("com.a", "Apple"))
 
         assertTrue(InstalledApps.filterByQuery(entries, "找不到的東西").isEmpty())
+    }
+
+    // ---- 查詢用的 flag ----
+
+    @Test
+    fun `查詢時不得使用 MATCH_DEFAULT_ONLY`() {
+        // 這是一個真實發生過的 bug：原本用 PackageManager.MATCH_DEFAULT_ONLY，
+        // 結果 Instagram、Threads、Facebook 等一大批 app 從清單中整個消失。
+        //
+        // 原因是 MATCH_DEFAULT_ONLY 只回傳宣告了 CATEGORY_DEFAULT 的 activity，
+        // 而桌面入口宣告的是 CATEGORY_LAUNCHER —— 沒有任何規定要求兩者同時存在。
+        //
+        // 這個 bug 不會拋例外、不會留下 log，清單看起來完全正常，只是少了東西。
+        // 所以用掃描原始碼的方式擋住它，而不是靠記得。
+        val source = File("src/main/java/com/mindgohua/settings/InstalledApps.kt")
+        assertTrue("找不到 InstalledApps.kt", source.exists())
+
+        val code = source.readLines()
+            .map { it.substringBefore("//") }
+            .joinToString("\n")
+
+        assertFalse(
+            "queryIntentActivities 不得使用 MATCH_DEFAULT_ONLY —— " +
+                "它會濾掉沒有宣告 CATEGORY_DEFAULT 的 launcher activity（例如 Instagram）",
+            code.contains("MATCH_DEFAULT_ONLY"),
+        )
     }
 
     @Test

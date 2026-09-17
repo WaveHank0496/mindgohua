@@ -2,7 +2,6 @@ package com.mindgohua.settings
 
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.content.pm.ResolveInfo
 
 /**
@@ -56,8 +55,18 @@ object InstalledApps {
         val pm = context.packageManager
         val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
 
+        // flag 必須是 0，**不可以用 MATCH_DEFAULT_ONLY**。
+        //
+        // MATCH_DEFAULT_ONLY 的意思是「只回傳有宣告 CATEGORY_DEFAULT 的 activity」，
+        // 而桌面圖示的入口宣告的是 CATEGORY_LAUNCHER —— 兩者是不同的 category，
+        // 沒有任何規定要求 launcher activity 必須同時宣告 DEFAULT。
+        //
+        // 實測（OPPO Reno7）：系統對 MAIN/LAUNCHER 共解析出 185 個套件，
+        // 但加上 MATCH_DEFAULT_ONLY 之後，Instagram、Threads、Facebook 等
+        // 一大批 app 會**整個消失**，而且不會有任何錯誤 —— 清單看起來正常，
+        // 只是少了東西。這是最難發現的一種 bug。
         val resolved: List<ResolveInfo> = runCatching {
-            pm.queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY)
+            pm.queryIntentActivities(intent, 0)
         }.getOrElse { emptyList() }
 
         return resolved
