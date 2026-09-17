@@ -77,41 +77,27 @@ object Permissions {
 
     fun accessibilitySettingsIntent(): Intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
 
+    /** 這台手機的廠牌對策。見 [OemSurvival]。 */
+    fun oemProfile(): OemSurvival.OemProfile = OemSurvival.profileFor(Build.MANUFACTURER)
+
     /**
-     * ColorOS「自啟動管理」（spec §7）。
+     * 「自啟動管理」設定頁（spec §7）。
      *
      * 這是 OEM 私有介面，沒有公開 API、也沒有保證存在的 component name，
      * 所以逐一試已知的 intent，全失敗就退回 app 詳細資訊頁，讓使用者自己找。
-     * 這段本質上是脆弱的，ColorOS 改版就可能失效 —— UI 上一定要同時附文字步驟說明。
+     *
+     * **原本這裡只寫死 OPPO 的四個 component**，因為開發機是 ColorOS。
+     * 對小米 / vivo / 華為 / Samsung 的使用者來說，「開啟」按鈕按下去
+     * 只會跳到一個不相干的頁面，或什麼都不做 —— 而他們不會知道原因。
+     * 現在改由 [OemSurvival] 依 [Build.MANUFACTURER] 給出對應清單。
+     *
+     * 這段本質上仍然是脆弱的，任何一家 OEM 改版都可能失效 ——
+     * 所以 UI 上一定要同時附**文字步驟**，那才是使用者真正的退路。
      */
-    fun autoStartIntents(context: Context): List<Intent> = listOf(
-        Intent().setComponent(
-            ComponentName(
-                "com.coloros.safecenter",
-                "com.coloros.safecenter.permission.startup.StartupAppListActivity",
-            )
-        ),
-        Intent().setComponent(
-            ComponentName(
-                "com.coloros.safecenter",
-                "com.coloros.safecenter.startupapp.StartupAppListActivity",
-            )
-        ),
-        Intent().setComponent(
-            ComponentName(
-                "com.oppo.safe",
-                "com.oppo.safe.permission.startup.StartupAppListActivity",
-            )
-        ),
-        Intent().setComponent(
-            ComponentName(
-                "com.oplus.battery",
-                "com.oplus.powermanager.fuelgaue.PowerConsumptionActivity",
-            )
-        ),
-        Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
-            .setData(Uri.parse("package:${context.packageName}")),
-    )
+    fun autoStartIntents(context: Context): List<Intent> =
+        OemSurvival.intentsFor(oemProfile()) +
+            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+                .setData(Uri.parse("package:${context.packageName}"))
 
     /** 依序試，開得起來就停。 */
     fun openAutoStartSettings(context: Context): Boolean {

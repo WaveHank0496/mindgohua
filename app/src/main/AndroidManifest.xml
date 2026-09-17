@@ -24,16 +24,24 @@
     <!-- ColorOS 殺後台對策：引導使用者放行電池最佳化 -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
-    <!-- 讓設定頁能列出可選的目標 app（IG / YouTube 是否安裝） -->
+    <!--
+        讓設定頁能列出使用者可挑選的目標 app。
+
+        原本這裡是一份寫死的白名單（IG / YouTube / TikTok…），代價是
+        使用者想看住 Threads、小紅書、Netflix 一律辦不到 —— 名單外的 app
+        我們連它裝沒裝都查不到。
+
+        改成宣告「查詢有桌面圖示的 app」。這樣能列出所有使用者實際會開來滑的東西，
+        而且**不需要 QUERY_ALL_PACKAGES**（那是 Google Play 列管的敏感權限，
+        上架要填表說明用途，核准與否不在我們手上）。
+
+        查不到的只有沒有桌面圖示的系統元件 —— 那些本來就不會有人拿來滑。
+    -->
     <queries>
-        <package android:name="com.instagram.android" />
-        <package android:name="com.google.android.youtube" />
-        <package android:name="com.zhiliaoapp.musically" />
-        <package android:name="com.ss.android.ugc.trill" />
-        <package android:name="com.facebook.katana" />
-        <package android:name="com.twitter.android" />
-        <package android:name="com.reddit.frontpage" />
-        <package android:name="com.google.android.apps.youtube.music" />
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
     </queries>
 
     <application

@@ -15,9 +15,12 @@ import com.mindgohua.overlay.OverlayController
 import com.mindgohua.service.GatekeeperService
 import com.mindgohua.settings.AppSettings
 import com.mindgohua.settings.DetectionMode
+import com.mindgohua.settings.InstalledApps
 import com.mindgohua.settings.SettingsStore
+import com.mindgohua.settings.TargetApps
 import com.mindgohua.stats.DailyStatsStore
 import com.mindgohua.stats.SurvivalLog
+import com.mindgohua.util.OemSurvival
 import com.mindgohua.util.Permissions
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -47,6 +50,14 @@ class MainActivity : ComponentActivity() {
 
     /** 當機紀錄的數量。同樣沒有 Flow 可訂閱，回到前景時重查。 */
     private val diagnosticsState = MutableStateFlow(DiagnosticsState())
+
+    /**
+     * 手機上可挑選的 app 清單。
+     *
+     * 在 onResume 重查，因為使用者很可能是「離開設定頁 → 去安裝一個新 app
+     * → 回來想把它加進名單」。不重查的話他會找不到剛裝好的東西。
+     */
+    private val installedAppsState = MutableStateFlow(InstalledAppsState(loading = true))
 
     private val notificationPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { refreshPermissions() }
@@ -83,6 +94,7 @@ class MainActivity : ComponentActivity() {
                     dailyTotalsFlow = stats.dailyTotals,
                     survivalFlow = survival.state,
                     diagnosticsFlow = diagnosticsState,
+                    installedAppsFlow = installedAppsState,
                     actions = actions,
                 )
             }
@@ -93,6 +105,7 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         refreshPermissions()
         refreshDiagnostics()
+        refreshInstalledApps()
         resumeServiceIfEnabled()
     }
 
@@ -119,6 +132,7 @@ class MainActivity : ComponentActivity() {
             notifications = Permissions.hasNotificationPermission(this),
             batteryUnrestricted = Permissions.isIgnoringBatteryOptimizations(this),
             accessibility = Permissions.isAccessibilityServiceEnabled(this),
+            oem = Permissions.oemProfile(),
         )
     }
 
@@ -126,6 +140,21 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch {
             val count = withContext(Dispatchers.IO) { crashLog.reports().size }
             diagnosticsState.value = DiagnosticsState(reportCount = count)
+        }
+    }
+
+    /**
+     * 重新查詢已安裝的 app。
+     *
+     * 一定要在 IO 執行緒：這是跨行程查詢，裝了幾百個 app 的手機上
+     * 可能要數百毫秒，放在主執行緒會讓設定頁開啟時明顯卡一下。
+     */
+    private fun refreshInstalledApps() {
+        lifecycleScope.launch {
+            val entries = withContext(Dispatchers.IO) {
+                InstalledApps.query(this@MainActivity)
+            }
+            installedAppsState.value = InstalledAppsState(entries = entries, loading = false)
         }
     }
 
@@ -215,12 +244,47 @@ data class PermissionState(
     val notifications: Boolean = false,
     val batteryUnrestricted: Boolean = false,
     val accessibility: Boolean = false,
+    /**
+     * 這台手機的廠牌對策。決定「讓貓活著」那張卡要顯示哪家的操作步驟。
+     * 預設給保守的 GENERIC，而不是 OPPO —— 預設值也是一種假設，
+     * 而「假設每個人都用 OPPO」正是這次要修掉的問題。
+     */
+    val oem: OemSurvival.OemProfile = OemSurvival.GENERIC,
 )
 
 /** 本機診斷紀錄的狀態。目前只有數量 —— 內容不進記憶體，要看就匯出。 */
 data class DiagnosticsState(
     val reportCount: Int = 0,
 )
+
+/**
+ * 可挑選的 app 清單。
+ *
+ * [loading] 與「查到空清單」是兩件不同的事，必須分開：
+ * 前者該顯示「正在讀取」，後者該顯示「讀不到」。
+ * 用同一個空清單表達兩種狀態，使用者會在載入的瞬間看到錯誤訊息。
+ */
+data class InstalledAppsState(
+    val entries: List<InstalledApps.AppEntry> = emptyList(),
+    val loading: Boolean = false,
+) {
+    private val byPackage: Map<String, String> by lazy {
+        entries.associate { it.packageName to it.label }
+    }
+
+    /** 查不到就退回 [TargetApps] 的內建表，再查不到就顯示套件名本身。 */
+    fun labelOf(packageName: String): String =
+        TargetApps.labelOf(packageName, byPackage[packageName])
+
+    /**
+     * 這個套件現在還在不在這台手機上。
+     *
+     * 載入中一律回報 true —— 否則清單會在載入的那一瞬間
+     * 把所有已選項目標成「已不在這台手機上」，那是假警報。
+     */
+    fun isInstalled(packageName: String): Boolean =
+        loading || packageName in byPackage
+}
 
 data class ScreenActions(
     val onToggleEnabled: (Boolean) -> Unit,

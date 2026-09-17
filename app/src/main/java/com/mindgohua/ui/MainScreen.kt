@@ -24,6 +24,7 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
@@ -37,6 +38,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -51,7 +53,7 @@ import com.mindgohua.R
 import com.mindgohua.detect.DetectorDebugBus
 import com.mindgohua.settings.AppSettings
 import com.mindgohua.settings.DetectionMode
-import com.mindgohua.settings.TargetApps
+import com.mindgohua.settings.InstalledApps
 import com.mindgohua.stats.DayTotal
 import com.mindgohua.stats.SurvivalState
 import kotlinx.coroutines.delay
@@ -67,6 +69,7 @@ fun MainScreen(
     dailyTotalsFlow: Flow<List<DayTotal>>,
     survivalFlow: Flow<SurvivalState>,
     diagnosticsFlow: StateFlow<DiagnosticsState>,
+    installedAppsFlow: StateFlow<InstalledAppsState>,
     actions: ScreenActions,
 ) {
     val settings by settingsFlow.collectAsState(initial = AppSettings())
@@ -76,6 +79,7 @@ fun MainScreen(
         initial = SurvivalState(0, 0, 0, 0, 0, false),
     )
     val diagnostics by diagnosticsFlow.collectAsState()
+    val installedApps by installedAppsFlow.collectAsState()
     val missing = settings.missingRequirements(permissions)
 
     Scaffold(
@@ -99,10 +103,10 @@ fun MainScreen(
             MasterSwitchCard(settings, missing, actions)
             PrivacyCard(settings)
             ModeCard(settings, actions)
-            TargetAppsCard(settings, actions)
+            TargetAppsCard(settings, installedApps, actions)
             ThresholdCard(settings, actions)
             if (settings.mode == DetectionMode.FOCUS) {
-                DailyCountCard(settings, dailyTotals, actions)
+                DailyCountCard(settings, dailyTotals, installedApps, actions)
                 ModeBAcceptanceCard(settings, permissions, actions)
                 RhythmTuningCard(settings, actions)
             }
@@ -249,27 +253,140 @@ private fun ModeOption(selected: Boolean, title: String, desc: String, onSelect:
     }
 }
 
+/**
+ * 挑選要看住哪些 app。
+ *
+ * 清單來自手機上實際安裝、且有桌面圖示的 app（見 [InstalledApps]），
+ * 不再是寫死的那 7 個 —— 使用者想看住什麼就看住什麼。
+ *
+ * 預設只顯示已選的項目，按「新增 app」才展開完整清單。
+ * 理由：多數人裝了上百個 app，一進設定頁就攤開一整面清單，
+ * 會把底下的門檻、權限等設定全部擠到看不見的地方。
+ */
 @Composable
-private fun TargetAppsCard(settings: AppSettings, actions: ScreenActions) {
+private fun TargetAppsCard(
+    settings: AppSettings,
+    installed: InstalledAppsState,
+    actions: ScreenActions,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    var query by remember { mutableStateOf("") }
+
     SectionCard("要看住哪些 app") {
-        TargetApps.selectable.forEach { (pkg, label) ->
-            val checked = pkg in settings.targetPackages
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .toggleable(
-                        value = checked,
-                        onValueChange = { value ->
-                            actions.onSettingsChange { it.toggleTarget(pkg, value) }
-                        },
-                    ),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Checkbox(checked = checked, onCheckedChange = null)
-                Spacer(Modifier.width(10.dp))
-                Text(label, fontSize = 15.sp)
+        val selected = settings.targetPackages
+
+        if (selected.isEmpty()) {
+            Text(
+                "還沒有選任何 app。沒有選的話，這個程式不會做任何事。",
+                fontSize = 13.sp,
+                color = MaterialTheme.colorScheme.error,
+            )
+        } else {
+            // 已選的項目即使解除安裝了也要顯示，否則使用者會看到一個
+            // 「明明選了 3 個卻只列出 2 個」的清單，卻不知道少了什麼。
+            selected.sorted().forEach { pkg ->
+                val label = installed.labelOf(pkg)
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .toggleable(
+                            value = true,
+                            onValueChange = { actions.onSettingsChange { s -> s.toggleTarget(pkg, false) } },
+                        ),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Checkbox(checked = true, onCheckedChange = null)
+                    Spacer(Modifier.width(10.dp))
+                    Column {
+                        Text(label, fontSize = 15.sp)
+                        if (!installed.isInstalled(pkg)) {
+                            Text(
+                                "已不在這台手機上",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.error,
+                            )
+                        }
+                    }
+                }
             }
         }
+
+        Spacer(Modifier.height(4.dp))
+
+        TextButton(onClick = { expanded = !expanded }) {
+            Text(if (expanded) "收起清單" else "新增 app")
+        }
+
+        if (expanded) {
+            when {
+                installed.loading -> Text(
+                    "正在讀取已安裝的 app…",
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+
+                installed.entries.isEmpty() -> Text(
+                    "讀不到已安裝的 app 清單。",
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.error,
+                )
+
+                else -> {
+                    OutlinedTextField(
+                        value = query,
+                        onValueChange = { query = it },
+                        label = { Text("搜尋 app") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Spacer(Modifier.height(8.dp))
+
+                    val visible = InstalledApps.sortForPicker(
+                        InstalledApps.filterByQuery(installed.entries, query),
+                        selected,
+                    )
+
+                    if (visible.isEmpty()) {
+                        Text(
+                            "找不到符合「$query」的 app。",
+                            fontSize = 13.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    } else {
+                        Text(
+                            "共 ${visible.size} 個",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        // 這裡刻意不用 LazyColumn：整張設定頁已經在一個
+                        // verticalScroll 裡，巢狀的可捲動容器會讓 Compose
+                        // 無法決定高度而直接崩潰。
+                        visible.forEach { entry ->
+                            val checked = entry.packageName in selected
+                            Row(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .toggleable(
+                                        value = checked,
+                                        onValueChange = { value ->
+                                            actions.onSettingsChange {
+                                                it.toggleTarget(entry.packageName, value)
+                                            }
+                                        },
+                                    ),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Checkbox(checked = checked, onCheckedChange = null)
+                                Spacer(Modifier.width(10.dp))
+                                Text(entry.label, fontSize = 15.sp)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        Spacer(Modifier.height(4.dp))
         Text(
             "沒有勾選的 app，本程式完全不處理它的事件。",
             fontSize = 12.sp,
@@ -560,12 +677,27 @@ private fun formatDuration(ms: Long): String {
     }
 }
 
+/**
+ * 讓服務活下去的設定引導。
+ *
+ * 文案與步驟**依手機廠牌而變**（見 [OemSurvival]）。原本這裡寫死了
+ * 「OPPO / ColorOS」，對其他廠牌的使用者來說是一段照著做也做不到的說明 ——
+ * 他們的手機裡根本沒有那個選單。
+ */
 @Composable
 private fun SurvivalCard(state: PermissionState, actions: ScreenActions) {
-    SectionCard("讓貓活著（ColorOS 必做）") {
+    val oem = state.oem
+    val title = if (oem.needsAutoStart) "讓貓活著（${oem.displayName} 必做）" else "讓貓活著"
+
+    SectionCard(title) {
         Text(
-            "OPPO / ColorOS 對背景程式管制很兇，不做這兩步的話，服務跑一陣子就會被系統殺掉，" +
-                "而且不會有任何提示 —— 你只會發現貓再也沒出現過。",
+            if (oem.needsAutoStart) {
+                "${oem.displayName} 對背景程式管制很兇，不做這幾步的話，服務跑一陣子就會被系統殺掉，" +
+                    "而且不會有任何提示 —— 你只會發現貓再也沒出現過。"
+            } else {
+                "你的系統接近原生 Android，沒有額外的自啟動管制，" +
+                    "但仍建議把電池限制解除，否則長時間待機後服務可能被收掉。"
+            },
             fontSize = 13.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -575,23 +707,33 @@ private fun SurvivalCard(state: PermissionState, actions: ScreenActions) {
             why = "設定 → 電池 → 找到本 app → 選「不受限制 / 允許背景執行」。",
             onFix = actions.onOpenBattery,
         )
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text("自啟動管理", fontSize = 15.sp, fontWeight = FontWeight.Medium)
-                Text(
-                    "手機管家 / 安全中心 → 自啟動管理 → 允許 mindgohua。" +
+        if (oem.needsAutoStart) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("自啟動管理", fontSize = 15.sp, fontWeight = FontWeight.Medium)
+                    Text(
                         "這個開關沒有 API 可查，請自行確認已開啟。",
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                TextButton(onClick = actions.onOpenAutoStart) { Text("開啟") }
             }
-            TextButton(onClick = actions.onOpenAutoStart) { Text("開啟") }
         }
+        // 文字步驟才是主要手段：上面那顆「開啟」按鈕用的是 OEM 私有介面，
+        // 隨時可能因為改版而失效，但這幾行字永遠有效。
         Text(
-            "另外建議在最近任務畫面把本 app 「上鎖」，避免被一鍵清理掃掉。",
+            "在你的手機上的步驟：",
             fontSize = 12.sp,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontWeight = FontWeight.Medium,
         )
+        oem.autoStartSteps.forEachIndexed { index, step ->
+            Text(
+                "${index + 1}. $step",
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
 }
 
@@ -656,6 +798,7 @@ private fun DiagnosticsToggle(settings: AppSettings, actions: ScreenActions) {
 private fun DailyCountCard(
     settings: AppSettings,
     dailyTotals: List<DayTotal>,
+    installed: InstalledAppsState,
     actions: ScreenActions,
 ) {
     val debugState by DetectorDebugBus.state.collectAsState()
@@ -707,7 +850,7 @@ private fun DailyCountCard(
         )
         today?.perApp?.forEach { (pkg, count) ->
             Text(
-                "　${TargetApps.labelOf(pkg)}　$count",
+                "　${installed.labelOf(pkg)}　$count",
                 fontSize = 14.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
