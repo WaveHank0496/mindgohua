@@ -6,4 +6,14 @@
 
     <string name="notif_channel_name">mindgohua 常駐</string>
     <string name="notif_channel_desc">維持偵測服務存活的常駐通知（Android 要求）</string>
+
+    <!--
+        獨立的頻道，不能跟常駐通知共用。
+        常駐通知是 IMPORTANCE_LOW 且靜音的（它只是 Android 的形式要求，
+        不該一直吵人），但「服務被系統殺掉」是使用者真的需要看到的事 ——
+        用同一個頻道的話，這則提醒會跟著被壓低到看不見。
+        分開也讓使用者能只關掉其中一種。
+    -->
+    <string name="notif_alert_channel_name">服務中斷提醒</string>
+    <string name="notif_alert_channel_desc">系統把背景服務關掉、導致這段期間沒有在看住你的 app 時通知你</string>
 </resources>

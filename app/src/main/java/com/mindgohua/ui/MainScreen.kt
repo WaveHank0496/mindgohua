@@ -111,7 +111,7 @@ fun MainScreen(
                 RhythmTuningCard(settings, actions)
             }
             PermissionsCard(settings, permissions, actions)
-            SurvivalStatusCard(survival, actions)
+            SurvivalStatusCard(survival, settings, actions)
             SurvivalCard(permissions, actions)
             TestCard(settings, actions)
             DiagnosticsCard(diagnostics, actions)
@@ -600,7 +600,11 @@ private fun StatusDot(ok: Boolean) {
  * 所以讓 app 自己記錄，測完打開來看就好。
  */
 @Composable
-private fun SurvivalStatusCard(survival: SurvivalState, actions: ScreenActions) {
+private fun SurvivalStatusCard(
+    survival: SurvivalState,
+    settings: AppSettings,
+    actions: ScreenActions,
+) {
     // 每秒重算一次顯示用的「現在」，讓存活時間會自己往上跑。
     var nowMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) {
@@ -660,6 +664,23 @@ private fun SurvivalStatusCard(survival: SurvivalState, actions: ScreenActions) 
             fontSize = 12.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+
+        Spacer(Modifier.height(8.dp))
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("被系統關掉時通知我", fontSize = 15.sp, fontWeight = FontWeight.Medium)
+                Text(
+                    "這個 app 失效的方式是無聲的：開關還是開的，但貓再也不出現。" +
+                        "開著這個，系統把服務關掉超過 30 分鐘時會發一則通知告訴你。",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Switch(
+                checked = settings.survivalAlertEnabled,
+                onCheckedChange = { v -> actions.onSettingsChange { it.setSurvivalAlertEnabled(v) } },
+            )
+        }
 
         TextButton(onClick = actions.onResetSurvival) { Text("重新開始記錄") }
     }

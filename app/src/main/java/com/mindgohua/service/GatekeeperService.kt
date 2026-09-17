@@ -34,6 +34,8 @@ import com.mindgohua.settings.DetectionMode
 import com.mindgohua.settings.SettingsStore
 import com.mindgohua.settings.TargetApps
 import com.mindgohua.stats.DailyStatsStore
+import com.mindgohua.stats.GapInfo
+import com.mindgohua.stats.SurvivalAlert
 import com.mindgohua.stats.SurvivalLog
 import com.mindgohua.ui.MainActivity
 import kotlinx.coroutines.CoroutineScope
@@ -190,13 +192,73 @@ class GatekeeperService : Service() {
     private fun startHeartbeat() {
         if (heartbeatJob != null) return
         heartbeatJob = scope.launch {
-            val hadGap = survivalLog.onServiceStart()
-            if (hadGap) Log.w(TAG, "偵測到服務中斷過")
+            val gap = survivalLog.onServiceStart()
+            if (gap.detected) {
+                Log.w(TAG, "偵測到服務中斷過：${gap.durationMs} ms，重開機=${gap.wasReboot}")
+                maybeAlertUser(gap)
+            }
             while (isActive) {
                 delay(SurvivalLog.HEARTBEAT_INTERVAL_MS)
                 survivalLog.heartbeat()
             }
         }
+    }
+
+    /**
+     * 服務被系統殺掉時主動通知使用者。
+     *
+     * 在此之前，這個事實只寫進 `Log.w` —— 而 logcat 只有插著 USB 線的開發者
+     * 看得到。對真正的使用者來說，這個 app 的失效方式是：開關還是開的、
+     * 設定都還在，但貓再也不出現，而且沒有任何提示。
+     *
+     * 判斷「該不該提醒」的規則全部在 [SurvivalAlert]（純函式、有單元測試），
+     * 這裡只負責把結果變成一則通知。
+     */
+    private suspend fun maybeAlertUser(gap: GapInfo) {
+        if (!settings.survivalAlertEnabled) return
+        val should = SurvivalAlert.shouldNotify(
+            hadGap = gap.detected,
+            gapDurationMs = gap.durationMs,
+            wasReboot = gap.wasReboot,
+            alreadyNotifiedGapTo = gap.alreadyAlertedGapTo,
+            gapToMs = gap.gapToMs,
+        )
+        if (!should) return
+
+        runCatching {
+            val nm = getSystemService(NotificationManager::class.java)
+            nm.notify(ALERT_NOTIFICATION_ID, buildAlertNotification(SurvivalAlert.message(gap.durationMs)))
+        }.onFailure { Log.w(TAG, "中斷提醒發送失敗：${it.message}") }
+
+        // 不論通知有沒有成功送出去都要記 —— 失敗多半是權限被關掉，
+        // 那種情況重試一百次也不會成功，只會在每次重啟時多做一次白工。
+        survivalLog.markAlerted(gap.gapToMs)
+    }
+
+    /**
+     * 中斷提醒的通知。
+     *
+     * 跟常駐通知的差別：**不是 ongoing**（使用者要能滑掉）、**不靜音**、
+     * 用較高的重要性，而且 [NotificationCompat.setAutoCancel] 讓它點完就消失。
+     * 常駐通知刻意設計成不打擾人，但這一則的目的正好相反 —— 它必須被看見。
+     */
+    private fun buildAlertNotification(text: String): Notification {
+        val openApp = PendingIntent.getActivity(
+            this,
+            1,
+            Intent(this, MainActivity::class.java),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
+        return NotificationCompat.Builder(this, ALERT_CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle("貓剛才沒在看著")
+            .setContentText(text)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+            .setContentIntent(openApp)
+            .setAutoCancel(true)
+            .setCategory(NotificationCompat.CATEGORY_STATUS)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .build()
     }
 
     // ---- 每日計數（spec §0.1 的例外，見 DailyStatsStore 的說明）----
@@ -455,12 +517,30 @@ class GatekeeperService : Service() {
             setShowBadge(false)
         }
         getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
+
+        // 中斷提醒用獨立頻道。常駐通知是 IMPORTANCE_LOW 且靜音的
+        // （它只是 Android 的形式要求，不該一直吵人），但「服務被系統殺掉」
+        // 是使用者真的需要看到的事 —— 共用頻道會讓它一起被壓低到看不見。
+        // 分開也讓使用者能只關掉其中一種。
+        val alertChannel = NotificationChannel(
+            ALERT_CHANNEL_ID,
+            getString(R.string.notif_alert_channel_name),
+            NotificationManager.IMPORTANCE_DEFAULT,
+        ).apply {
+            description = getString(R.string.notif_alert_channel_desc)
+            setShowBadge(true)
+        }
+        getSystemService(NotificationManager::class.java).createNotificationChannel(alertChannel)
     }
 
     companion object {
         private const val TAG = "GatekeeperService"
         private const val CHANNEL_ID = "mindgohua_ongoing"
         private const val NOTIFICATION_ID = 1001
+
+        /** 中斷提醒。ID 必須與常駐通知不同，否則兩者會互相覆蓋。 */
+        private const val ALERT_CHANNEL_ID = "mindgohua_alert"
+        private const val ALERT_NOTIFICATION_ID = 1002
 
         /** 每日計數多久寫一次磁碟。太密會一直做 I/O，太疏會在服務被殺時丟資料。 */
         private const val FLUSH_INTERVAL_MS = 15_000L
