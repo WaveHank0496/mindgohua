@@ -49,6 +49,15 @@ class SurvivalLog(private val context: Context) {
         val LAST_GAP_FROM = longPreferencesKey("last_gap_from")
         val LAST_GAP_TO = longPreferencesKey("last_gap_to")
         val LAST_GAP_WAS_REBOOT = intPreferencesKey("last_gap_was_reboot")
+
+        /**
+         * 已經就哪一次中斷提醒過使用者（存該次中斷的結束時間戳）。
+         *
+         * 需要持久化而不是放記憶體：服務被殺之後可能連續重啟失敗好幾輪，
+         * 每輪都是一個新的行程，記憶體裡的旗標會跟著消失 ——
+         * 結果就是同一次中斷把使用者轟炸好幾次。
+         */
+        val LAST_ALERTED_GAP_TO = longPreferencesKey("last_alerted_gap_to")
     }
 
     val state: Flow<SurvivalState> = context.survivalStore.data.map { prefs ->
@@ -63,32 +72,48 @@ class SurvivalLog(private val context: Context) {
     }
 
     /**
-     * 服務啟動時呼叫。若距離上次心跳超過 [gapThresholdMs]，就記錄一次中斷。
+     * 服務啟動時呼叫。若距離上次心跳超過 [GAP_THRESHOLD_MS]，就記錄一次中斷。
      *
-     * @return 這次啟動前是否偵測到中斷。
+     * @return 這次啟動偵測到的中斷資訊。
+     *
+     * 回傳型別從原本的 `Boolean` 改成 [GapInfo]：只知道「有沒有中斷」不足以
+     * 決定要不要提醒使用者 —— 還需要知道中斷多久（短的不值得吵人）、
+     * 是不是重開機（那不是被殺），以及結束時間戳（避免同一次重複提醒）。
      */
-    suspend fun onServiceStart(nowMs: Long = System.currentTimeMillis()): Boolean {
-        var detectedGap = false
+    suspend fun onServiceStart(nowMs: Long = System.currentTimeMillis()): GapInfo {
+        var info = GapInfo()
         context.survivalStore.edit { prefs ->
             val lastBeat = prefs[Keys.LAST_HEARTBEAT] ?: 0L
-            val lastBeatUptime = prefs[Keys.LAST_HEARTBEAT_UPTIME] ?: 0L
             val nowUptime = SystemClock.elapsedRealtime()
 
             if (lastBeat > 0 && nowMs - lastBeat > GAP_THRESHOLD_MS) {
-                detectedGap = true
                 // 開機時間比中斷長度還短 → 中間重開機了，不算 ColorOS 主動殺的。
                 val wasReboot = nowUptime < (nowMs - lastBeat)
                 prefs[Keys.GAP_COUNT] = (prefs[Keys.GAP_COUNT] ?: 0) + 1
                 prefs[Keys.LAST_GAP_FROM] = lastBeat
                 prefs[Keys.LAST_GAP_TO] = nowMs
                 prefs[Keys.LAST_GAP_WAS_REBOOT] = if (wasReboot) 1 else 0
+                info = GapInfo(
+                    detected = true,
+                    durationMs = nowMs - lastBeat,
+                    wasReboot = wasReboot,
+                    gapToMs = nowMs,
+                    alreadyAlertedGapTo = prefs[Keys.LAST_ALERTED_GAP_TO] ?: 0L,
+                )
             }
 
             prefs[Keys.STARTED_AT] = nowMs
             prefs[Keys.LAST_HEARTBEAT] = nowMs
             prefs[Keys.LAST_HEARTBEAT_UPTIME] = nowUptime
         }
-        return detectedGap
+        return info
+    }
+
+    /** 記下「這次中斷已經提醒過了」，避免服務反覆重啟時重複轟炸使用者。 */
+    suspend fun markAlerted(gapToMs: Long) {
+        context.survivalStore.edit { prefs ->
+            prefs[Keys.LAST_ALERTED_GAP_TO] = gapToMs
+        }
     }
 
     suspend fun heartbeat(nowMs: Long = System.currentTimeMillis()) {
@@ -119,6 +144,20 @@ class SurvivalLog(private val context: Context) {
         const val GAP_THRESHOLD_MS = 3 * 60_000L
     }
 }
+
+/**
+ * 服務啟動時偵測到的中斷資訊。
+ *
+ * [alreadyAlertedGapTo] 帶著「上次已提醒過哪一次中斷」一起回來，是為了讓
+ * 判斷邏輯（[SurvivalAlert.shouldNotify]）可以是一個不碰儲存層的純函式。
+ */
+data class GapInfo(
+    val detected: Boolean = false,
+    val durationMs: Long = 0L,
+    val wasReboot: Boolean = false,
+    val gapToMs: Long = 0L,
+    val alreadyAlertedGapTo: Long = 0L,
+)
 
 data class SurvivalState(
     val startedAtMs: Long,

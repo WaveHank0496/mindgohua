@@ -29,6 +29,7 @@ class SettingsStore(private val context: Context) {
         val GRACE_MIN = intPreferencesKey("grace_minutes")
         val UNLOCK_DELAY_SEC = intPreferencesKey("unlock_delay_seconds")
         val DIAGNOSTICS = booleanPreferencesKey("diagnostics_notification")
+        val SURVIVAL_ALERT = booleanPreferencesKey("survival_alert_enabled")
         val STATS_ENABLED = booleanPreferencesKey("stats_enabled")
         val HUD_ENABLED = booleanPreferencesKey("hud_enabled")
         val DAY_BOUNDARY_HOUR = intPreferencesKey("day_boundary_hour")
@@ -50,6 +51,7 @@ class SettingsStore(private val context: Context) {
             graceMinutes = prefs[Keys.GRACE_MIN] ?: defaults.graceMinutes,
             unlockDelaySeconds = prefs[Keys.UNLOCK_DELAY_SEC] ?: defaults.unlockDelaySeconds,
             diagnosticsNotification = prefs[Keys.DIAGNOSTICS] ?: defaults.diagnosticsNotification,
+            survivalAlertEnabled = prefs[Keys.SURVIVAL_ALERT] ?: defaults.survivalAlertEnabled,
             statsEnabled = prefs[Keys.STATS_ENABLED] ?: defaults.statsEnabled,
             hudEnabled = prefs[Keys.HUD_ENABLED] ?: defaults.hudEnabled,
             dayBoundaryHour = prefs[Keys.DAY_BOUNDARY_HOUR] ?: defaults.dayBoundaryHour,
@@ -69,6 +71,7 @@ class SettingsStore(private val context: Context) {
     suspend fun setGraceMinutes(value: Int) = edit { it[Keys.GRACE_MIN] = value.coerceIn(0, 120) }
     suspend fun setUnlockDelaySeconds(value: Int) = edit { it[Keys.UNLOCK_DELAY_SEC] = value.coerceIn(0, 30) }
     suspend fun setDiagnosticsNotification(value: Boolean) = edit { it[Keys.DIAGNOSTICS] = value }
+    suspend fun setSurvivalAlertEnabled(value: Boolean) = edit { it[Keys.SURVIVAL_ALERT] = value }
     suspend fun setStatsEnabled(value: Boolean) = edit { it[Keys.STATS_ENABLED] = value }
     suspend fun setHudEnabled(value: Boolean) = edit { it[Keys.HUD_ENABLED] = value }
     suspend fun setDayBoundaryHour(value: Int) = edit { it[Keys.DAY_BOUNDARY_HOUR] = value.coerceIn(0, 23) }
