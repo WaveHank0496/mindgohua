@@ -105,7 +105,12 @@ class GatekeeperService : Service() {
                         else -> Unit
                     }
                     hideOverlayOnMain()
+                    // 先結束 session、再停輪詢。順序不能反 ——
+                    // 輪詢先停的話，forceLeaveTarget 之後就沒有下一輪把狀態送出去。
+                    detector?.setScreenOn(false)
                 }
+
+                Intent.ACTION_SCREEN_ON -> detector?.setScreenOn(true)
             }
         }
     }
@@ -121,7 +126,11 @@ class GatekeeperService : Service() {
         ContextCompat.registerReceiver(
             this,
             screenReceiver,
-            IntentFilter(Intent.ACTION_SCREEN_OFF),
+            IntentFilter().apply {
+                addAction(Intent.ACTION_SCREEN_OFF)
+                // 新增 SCREEN_ON：螢幕關閉時輪詢會完全停止，沒有這個就再也不會恢復。
+                addAction(Intent.ACTION_SCREEN_ON)
+            },
             ContextCompat.RECEIVER_NOT_EXPORTED,
         )
     }

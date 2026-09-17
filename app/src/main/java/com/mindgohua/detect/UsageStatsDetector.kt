@@ -40,6 +40,16 @@ class UsageStatsDetector(
 
     private var pollJob: Job? = null
 
+    /**
+     * 留著 [start] 傳進來的回呼，螢幕重新亮起時要用它把輪詢接回來。
+     * 這是唯一需要跨越「暫停/恢復」保存的東西。
+     */
+    private var signalSink: ((SessionEvent) -> Unit)? = null
+
+    /** 螢幕是否亮著。預設 true —— 服務啟動時螢幕通常是亮的（使用者剛按下開關）。 */
+    @Volatile
+    private var screenOn: Boolean = true
+
     /** 上次查詢到的時間點（wall clock），下次從這裡接著查。 */
     private var lastQueryEndWallMs: Long = 0L
 
@@ -50,7 +60,13 @@ class UsageStatsDetector(
 
     override fun start(onSignal: (SessionEvent) -> Unit) {
         stop()
+        signalSink = onSignal
         lastQueryEndWallMs = System.currentTimeMillis() - INITIAL_LOOKBACK_MS
+        startPolling(onSignal)
+    }
+
+    private fun startPolling(onSignal: (SessionEvent) -> Unit) {
+        if (pollJob != null) return
         pollJob = scope.launch {
             // 開機先看一眼目前誰在前景，否則要等到下一次切換才知道。
             primeCurrentForeground(onSignal)
@@ -58,14 +74,47 @@ class UsageStatsDetector(
                 pump(onSignal)
                 onSignal(SessionEvent.Tick(nowElapsed()))
                 emitDebug()
-                delay(POLL_INTERVAL_MS)
+
+                // 間隔依狀態而變，不再是固定的 2 秒。null 代表螢幕已關 ——
+                // 這時直接結束迴圈，等 setScreenOn(true) 再重新啟動，
+                // 而不是用一個長 delay 空轉（那仍然會週期性喚醒行程）。
+                val delayMs = PollingPolicy.nextDelayMs(
+                    screenOn = screenOn,
+                    inTargetApp = lastReportedIsTarget == true,
+                ) ?: break
+                delay(delayMs)
             }
+        }
+    }
+
+    /**
+     * 螢幕關閉時**完全停掉輪詢**，亮起時重新開始。
+     *
+     * 這是這個 app 最大的一筆無謂耗電：原本不論螢幕開關都固定每 2 秒查一次，
+     * 一天關螢幕 16 小時就是約 28,800 次毫無意義的跨行程查詢。
+     *
+     * 注意這裡只負責「要不要查」。「螢幕關了要結束 session」是另一件事，
+     * 由 GatekeeperService 呼叫 [forceLeaveTarget] 處理 —— 兩者不能混為一談，
+     * 否則螢幕一關，計時狀態會因為輪詢停止而卡在原地而不是歸零。
+     */
+    override fun setScreenOn(on: Boolean) {
+        if (screenOn == on) return
+        screenOn = on
+        if (on) {
+            // 停掉的期間沒有查詢，事件會累積在系統那邊。
+            // 從現在往回看一小段，避免把剛剛的切換整個漏掉。
+            lastQueryEndWallMs = System.currentTimeMillis() - INITIAL_LOOKBACK_MS
+            signalSink?.let { startPolling(it) }
+        } else {
+            pollJob?.cancel()
+            pollJob = null
         }
     }
 
     override fun stop() {
         pollJob?.cancel()
         pollJob = null
+        signalSink = null
         foregroundPackage = null
         lastReportedIsTarget = null
     }
@@ -176,8 +225,8 @@ class UsageStatsDetector(
     private companion object {
         const val TAG = "UsageStatsDetector"
 
-        /** 2 秒一次：夠即時（門檻是分鐘級），又不會有可觀耗電。 */
-        const val POLL_INTERVAL_MS = 2_000L
+        // 輪詢間隔已移到 PollingPolicy —— 它會依螢幕狀態與是否在目標 app 而變，
+        // 不再是一個固定值。
         const val INITIAL_LOOKBACK_MS = 60_000L
     }
 }
