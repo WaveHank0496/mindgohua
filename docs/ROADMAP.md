@@ -6,7 +6,7 @@
 > 目標：把 `Mindgohua_Spec.md` 的 prototype 變成一個能在 **Google Play 公開上架**、
 > 陌生人裝了也不會壞掉的 app。
 >
-> 最後更新：2026-09-16
+> 最後更新：2026-09-17
 
 ---
 
@@ -97,7 +97,8 @@ GitHub 的 ubuntu runner 本來就預裝 Android SDK 且授權已接受，這個
 - [x] **本機 crash 記錄**：app 爆掉時寫進手機本機檔案
 - [x] 設定頁加「匯出診斷記錄」按鈕，使用者自己決定要不要傳給你
 - [x] **當機寫入路徑的驗收方法**（已解決，見下）
-- [ ] `targetSdk` 34 → 35（Play 對新上架 app 的要求）
+- [x] `targetSdk` 34 → 35（Play 對新上架 app 的要求）——已於 OPPO Reno7 實機驗收，
+      overlay、倒數、長按解除、診斷卡片皆正常
 - [ ] 版本號規則：`versionCode` 自動遞增、`versionName` 語意化
 - [ ] 開啟 R8 程式碼壓縮並確認不會壓壞 Compose / DataStore
 
@@ -132,17 +133,45 @@ GitHub 的 ubuntu runner 本來就預裝 Android SDK 且授權已接受，這個
 
 ---
 
-### ⬜ M2 — 去 OPPO 化
+### 🟨 M2 — 自由選 app + 去 OPPO 化
 
-目前 app 裡寫死了 ColorOS 的設定頁路徑跟文案。別的廠牌使用者裝了會看到不適用的指示。
-
-- [ ] `Build.MANUFACTURER` → 各廠牌自啟動設定頁的對照表（OPPO / 小米 / vivo / 華為 / Samsung / 近原生）
-- [ ] 設定頁文案隨廠牌變，而不是一律講 ColorOS
+- [x] **使用者可自由挑選要看住的 app**（原本只有寫死的 7 個）
+- [x] `Build.MANUFACTURER` → 各廠牌自啟動設定頁的對照表（OPPO / 小米 / vivo / 華為 / Samsung / OnePlus / ASUS / 近原生）
+- [x] 設定頁文案隨廠牌變，而不是一律講 ColorOS
+- [x] 找不到對照表項目時的退路（退回系統設定頁 + 文字步驟）
 - [ ] 「貓好像沒在運作」的主動提醒：`SurvivalLog` 已經能偵測服務被殺，
       但目前只有你打開 app 才看得到。要讓它主動告訴使用者。
-- [ ] 找不到對照表項目時的退路（退回系統設定頁 + 文字步驟）
 
-**你要做的事：** 在 OPPO 上確認改完之後**沒有壞掉**。其他廠牌我們驗不了，靠退路機制兜底。
+**測試數：79（M1 結束時 55 → 加入 app 挑選 12 + 廠牌對照 12 後 79）。**
+
+#### 自由選 app：底層一行都沒改
+
+原本以為要大改，實際上偵測端三處（`UsageStatsDetector`、`ScrollAccessibilityDetector`、
+`ScrollWatchService`）吃的一直是**一個字串集合**，從不在乎那些字串來自哪裡。
+真正的限制只在兩個地方：UI 寫死的 `selectable` 清單，以及 Manifest 的 `<queries>` 白名單。
+
+> **教訓：「加功能很難」常常是假設，不是事實。先查清楚現有程式碼真正的限制在哪。**
+
+刻意**不用** `QUERY_ALL_PACKAGES`：那是 Google Play 列管的敏感權限，
+上架要填表說明用途且核准與否不在我們手上。改成查詢有 LAUNCHER 入口的 app，
+不需任何敏感權限，而查不到的只有沒有桌面圖示的系統元件 —— 本來就沒人拿來滑。
+
+#### 一個我自己犯的測試設計錯誤
+
+`OemSurvivalTest` 第一次跑就有一個失敗：
+`Method setComponent in android.content.Intent not mocked`。
+
+原因是我在一個宣稱「純資料、不碰 Android」的測試檔裡，寫了兩個實際建構
+`Intent` 的測試。純 JVM 單元測試環境裡的 Android 類別只是**沒有實作的空殼**，
+呼叫任何方法都會丟例外。
+
+修法不是去 mock `Intent`，而是改成斷言 `components` 這份純資料本身 ——
+真正會寫錯的是資料（打錯類別名、漏掉廠牌），不是那層包裝。
+
+> **教訓：測試要對準「真正可能出錯的東西」，而不是對準最外層那個好呼叫的函式。**
+
+**你要做的事：** 在 OPPO 上確認改完之後**沒有壞掉**。其他廠牌我們驗不了，
+靠對照表 + 文字步驟兜底 —— 文字步驟是主要手段，intent 只是省下找路的力氣。
 
 ---
 
