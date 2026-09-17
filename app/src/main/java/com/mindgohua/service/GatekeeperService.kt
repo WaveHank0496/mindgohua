@@ -38,6 +38,7 @@ import com.mindgohua.stats.GapInfo
 import com.mindgohua.stats.SurvivalAlert
 import com.mindgohua.stats.SurvivalLog
 import com.mindgohua.ui.MainActivity
+import java.util.Locale
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -482,9 +483,12 @@ class GatekeeperService : Service() {
         if (!d.accessibilityConnected) return "診斷：無障礙服務未連線"
         if (!d.inTargetApp) return "診斷：不在目標 app（事件累計 ${d.totalScrollEvents}）"
 
-        val cv = if (d.coefficientOfVariation.isNaN()) "—" else String.format("%.2f", d.coefficientOfVariation)
+        // 一律用 Locale.US 格式化數字。不指定 Locale 的話會跟著系統語言走，
+        // 而在阿拉伯文等語系下會輸出非 ASCII 的數字字元（٠١٢…），
+        // 讓這串診斷文字變得完全看不懂。這裡是給人讀數值用的，不是在地化內容。
+        val cv = if (d.coefficientOfVariation.isNaN()) "—" else String.format(Locale.US, "%.2f", d.coefficientOfVariation)
         val status = if (d.qualifying) "符合 ${d.sustainedSeconds}s" else "未達標"
-        return "密度 ${String.format("%.0f", d.densityPerMinute)}/分 · CV $cv · $status · 觸發 ${d.triggerCount}"
+        return "密度 ${String.format(Locale.US, "%.0f", d.densityPerMinute)}/分 · CV $cv · $status · 觸發 ${d.triggerCount}"
     }
 
     private fun buildNotification(text: String): Notification {

@@ -59,6 +59,7 @@ import com.mindgohua.stats.SurvivalState
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
+import java.util.Locale
 import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -1022,13 +1023,13 @@ private fun ModeBAcceptanceCard(
             )
             MetricRow(
                 label = "密度",
-                value = "${String.format("%.1f", d.densityPerMinute)} 次/分",
+                value = "${String.format(Locale.US, "%.1f", d.densityPerMinute)} 次/分",
                 threshold = "門檻 ≥ ${settings.rhythmMinDensityPerMinute}",
                 pass = d.densityPerMinute >= settings.rhythmMinDensityPerMinute,
             )
             MetricRow(
                 label = "變異係數 CV",
-                value = if (d.coefficientOfVariation.isNaN()) "樣本不足" else String.format("%.2f", d.coefficientOfVariation),
+                value = if (d.coefficientOfVariation.isNaN()) "樣本不足" else String.format(Locale.US, "%.2f", d.coefficientOfVariation),
                 threshold = "門檻 ≤ ${settings.rhythmMaxCvPercent / 100.0}",
                 pass = !d.coefficientOfVariation.isNaN() &&
                     d.coefficientOfVariation <= settings.rhythmMaxCvPercent / 100.0,
