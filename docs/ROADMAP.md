@@ -170,6 +170,28 @@ GitHub 的 ubuntu runner 本來就預裝 Android SDK 且授權已接受，這個
 
 > **教訓：測試要對準「真正可能出錯的東西」，而不是對準最外層那個好呼叫的函式。**
 
+#### 一個只有實機才抓得到的靜默 bug
+
+app 挑選清單做好、80 個測試全綠、CI 全綠、lint 乾淨、裝到手機也不當機 ——
+然後使用者打開一看：**Instagram、Threads、Facebook 全部不見了。**
+
+原因是 `queryIntentActivities` 傳了 `PackageManager.MATCH_DEFAULT_ONLY`。
+那個 flag 只回傳有宣告 `CATEGORY_DEFAULT` 的 activity，而桌面入口宣告的是
+`CATEGORY_LAUNCHER` —— 兩者是不同的 category，沒有規定要求同時宣告。
+IG 的 `.activity.MainTabActivity` 就只宣告了 LAUNCHER。
+
+實測（OPPO Reno7）：系統對 MAIN/LAUNCHER 共解析出 **185 個套件**，
+IG / Threads / FB 全都在其中 —— 是我們自己的 flag 把它們濾掉的。
+
+**這個 bug 不拋例外、不留 log、不當機。清單看起來完全正常，只是少了東西。**
+所有自動化檢查都是綠的，因為那是跨行程查詢的結果，測試環境裡根本沒有那些 app。
+
+> **教訓一：綠燈只能證明「我檢查的部分沒問題」，不能證明「功能是對的」。**
+> 使用者一句「IG 怎麼不見了」比 80 個測試更有價值。
+>
+> **教訓二：靜默的錯誤必須由會失敗的測試守住，不能靠記得。**
+> 修掉之後加了一個掃描原始碼的測試，只要 `MATCH_DEFAULT_ONLY` 再出現就變紅。
+
 **你要做的事：** 在 OPPO 上確認改完之後**沒有壞掉**。其他廠牌我們驗不了，
 靠對照表 + 文字步驟兜底 —— 文字步驟是主要手段，intent 只是省下找路的力氣。
 
