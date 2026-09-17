@@ -66,6 +66,7 @@ fun MainScreen(
     permissionsFlow: StateFlow<PermissionState>,
     dailyTotalsFlow: Flow<List<DayTotal>>,
     survivalFlow: Flow<SurvivalState>,
+    diagnosticsFlow: StateFlow<DiagnosticsState>,
     actions: ScreenActions,
 ) {
     val settings by settingsFlow.collectAsState(initial = AppSettings())
@@ -74,6 +75,7 @@ fun MainScreen(
     val survival by survivalFlow.collectAsState(
         initial = SurvivalState(0, 0, 0, 0, 0, false),
     )
+    val diagnostics by diagnosticsFlow.collectAsState()
     val missing = settings.missingRequirements(permissions)
 
     Scaffold(
@@ -108,6 +110,7 @@ fun MainScreen(
             SurvivalStatusCard(survival, actions)
             SurvivalCard(permissions, actions)
             TestCard(settings, actions)
+            DiagnosticsCard(diagnostics, actions)
             Spacer(Modifier.height(32.dp))
         }
     }
@@ -934,6 +937,61 @@ private fun MetricRow(label: String, value: String, threshold: String, pass: Boo
                 color = if (pass) Color(0xFF2E7D32) else MaterialTheme.colorScheme.onSurface,
             )
             Text(threshold, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+/**
+ * 本機診斷紀錄（當機報告）。
+ *
+ * 這張卡是「不宣告網路權限」這個決定的另一面。代價很直接：app 爆掉時
+ * 沒有任何東西會自動回報，開發者永遠不會知道，使用者只會覺得「這東西壞了」。
+ * 所以紀錄留在手機上，並且給使用者一個明確的出口 —— 要不要送出、送給誰，由他決定。
+ *
+ * 沒有紀錄時這張卡也照樣顯示，不藏起來：使用者該在「還沒出事」的時候就知道
+ * 這個機制存在，而不是出事之後才發現手機裡有一份他不知情的檔案。
+ */
+@Composable
+private fun DiagnosticsCard(state: DiagnosticsState, actions: ScreenActions) {
+    SectionCard("診斷紀錄") {
+        Text(
+            "本 app 沒有網路權限，當機時不會自動回報任何東西。程式若異常結束，" +
+                "錯誤訊息會寫進這台手機的私有目錄 —— 其他 app 讀不到，解除安裝就一起消失。",
+            fontSize = 13.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            "紀錄裡只有：時間、app 版本、Android 版本、手機型號、錯誤堆疊。" +
+                "不含你在看住哪些 app、用了多久，也不含任何設定值。",
+            fontSize = 12.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
+        Spacer(Modifier.height(4.dp))
+
+        if (state.reportCount == 0) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                StatusDot(true)
+                Spacer(Modifier.width(10.dp))
+                Text("目前沒有當機紀錄", fontSize = 14.sp)
+            }
+        } else {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                StatusDot(false)
+                Spacer(Modifier.width(10.dp))
+                Text(
+                    "有 ${state.reportCount} 份當機紀錄",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                )
+            }
+            Text(
+                "匯出後可以傳給開發者協助修正。存到哪裡由你選，app 不會自己送出去。",
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            OutlinedButton(onClick = actions.onExportDiagnostics) { Text("匯出診斷紀錄") }
+            TextButton(onClick = actions.onClearDiagnostics) { Text("清除紀錄") }
         }
     }
 }
