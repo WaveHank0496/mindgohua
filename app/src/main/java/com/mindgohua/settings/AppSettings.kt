@@ -5,11 +5,15 @@ import com.mindgohua.core.EngineConfig
 import com.mindgohua.core.RhythmConfig
 
 enum class DetectionMode {
-    /** Mode A：只看「哪個 app 在前景、連續多久」，看不到畫面內容。 */
+    /** 只看「哪個 app 在前景、連續多久」，看不到畫面內容。 */
     PRIVACY,
 
-    /** Mode B：讀捲動事件的時間戳，判斷滑動節奏。需 AccessibilityService。 */
-    FOCUS,
+    // 原本還有 FOCUS（讀捲動事件的時間戳判斷滑動節奏，需 AccessibilityService）。
+    // v1 移除實作以避開 Play 的無障礙用途宣告審查 —— 見 AndroidManifest 的說明。
+    //
+    // 列舉本身保留成單一值而不是整個刪掉，是為了讓 SettingsStore 存的 "PRIVACY"
+    // 字串、以及舊使用者磁碟上可能存著的 "FOCUS" 字串都還有地方可去
+    // （SettingsStore 的 valueOf 失敗會安全退回 PRIVACY）。
 }
 
 /**

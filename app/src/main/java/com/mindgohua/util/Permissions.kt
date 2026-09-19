@@ -13,7 +13,6 @@ import android.os.PowerManager
 import android.os.Process
 import android.provider.Settings
 import androidx.core.content.ContextCompat
-import com.mindgohua.service.ScrollWatchService
 
 /**
  * 權限狀態查詢與「帶使用者去開」的 intent（spec §3 的權限清單 + §7 的 ColorOS 引導）。
@@ -77,17 +76,9 @@ object Permissions {
     fun batteryOptimizationIntent(context: Context): Intent =
         Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
 
-    /** Mode B 用。無障礙服務是否已啟用。 */
-    fun isAccessibilityServiceEnabled(context: Context): Boolean {
-        val expected = ComponentName(context, ScrollWatchService::class.java).flattenToString()
-        val enabled = Settings.Secure.getString(
-            context.contentResolver,
-            Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
-        ) ?: return false
-        return enabled.split(':').any { it.equals(expected, ignoreCase = true) }
-    }
-
-    fun accessibilitySettingsIntent(): Intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
+    // 原本這裡有 isAccessibilityServiceEnabled() 與 accessibilitySettingsIntent()，
+    // 服務於 Mode B。v1 連同 AccessibilityService 一起移除 —— 這個 app 現在
+    // 不會、也無法要求無障礙權限。
 
     /** 這台手機的廠牌對策。見 [OemSurvival]。 */
     fun oemProfile(): OemSurvival.OemProfile = OemSurvival.profileFor(Build.MANUFACTURER)

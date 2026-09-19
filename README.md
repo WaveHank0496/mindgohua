@@ -82,8 +82,9 @@ spec §0 的原則不是靠註解，是靠會失敗的測試（`PrivacyInvariant
 |---|---|
 | 不得連網 | manifest 沒有 `INTERNET`；測試會掃 manifest，加回去就紅 |
 | 不得引入網路函式庫 | 測試會掃 `build.gradle.kts` 的相依清單 |
-| 不讀畫面內容 | `canRetrieveWindowContent="false"`，測試會檢查 |
-| 行為自限 | `ScrollWatchService` 動態設定 `serviceInfo.packageNames`，**非目標 app 的事件根本不會進到這個行程**——由系統過濾，不是靠程式自律 |
+| 不讀畫面內容 | 本 app 只向系統查「哪個 app 在前景、從幾點到幾點」，拿不到畫面上的任何內容 |
+| 沒有無障礙服務 | v1 完全移除，manifest 裡連宣告都沒有——`PrivacyInvariantTest` 會擋住任何人加回來 |
+| 非目標 app | 系統送來的前景事件涵蓋所有 app，本程式**讀完立刻丟棄**不是目標的那些：不處理、不記錄、不留痕跡。這是程式自律，不是系統過濾——舊版曾靠 `ScrollWatchService` 的 `serviceInfo.packageNames` 做系統層過濾，那個機制隨 Mode B 一起移除了 |
 | 不落地 | ⚠️ **已放寬**，見下 |
 
 ### spec §0.1「不落地」的放寬（使用者要求）

@@ -58,15 +58,22 @@ class PrivacyInvariantTest {
     }
 
     @Test
-    fun `無障礙服務不得具備讀取視窗內容的能力`() {
-        val text = accessibilityConfig.readText()
-        assertTrue(
-            "違反 spec §10：canRetrieveWindowContent 必須明確為 false",
-            text.contains("android:canRetrieveWindowContent=\"false\""),
+    fun `不得宣告任何無障礙服務`() {
+        // 這條取代了原本「無障礙服務不得讀取視窗內容」的測試 —— v1 直接把整個
+        // AccessibilityService 移除，所以要守的不再是「它有沒有規矩」，
+        // 而是「它根本不存在」。
+        //
+        // 為什麼值得用測試釘住：Play 掃的是上傳的 AAB 裡的**合併後** manifest，
+        // 不是 app 的畫面。把功能從 UI 隱藏起來對掃描結果沒有任何影響 ——
+        // 只要宣告還在，就會觸發無障礙用途宣告，而那是拒絕率最高的類別之一。
+        val text = manifest.readText()
+        assertFalse(
+            "manifest 宣告了 AccessibilityService —— v1 不該有，見 AndroidManifest 裡的說明",
+            text.contains("android.accessibilityservice.AccessibilityService"),
         )
         assertFalse(
-            "違反 spec §10：不得監聽捲動以外的事件型別",
-            text.contains("typeWindowContentChanged") || text.contains("typeAllMask"),
+            "manifest 宣告了 BIND_ACCESSIBILITY_SERVICE",
+            text.contains("BIND_ACCESSIBILITY_SERVICE"),
         )
     }
 
@@ -107,6 +114,40 @@ class PrivacyInvariantTest {
                 )
             }
         }
+    }
+
+    @Test
+    fun `隱私文案不得宣稱做不到的事`() {
+        // 為什麼這條值得用測試守住：
+        //
+        // 這幾句話寫在設定頁的「這個 app 看得到什麼」卡片上，是最容易被
+        // 原封不動複製進隱私政策與商店說明的那種句子。而 Play 會比對
+        // 商店說明、app 內文案、Data Safety 表單三者是否一致 ——
+        // 不一致時被抓的通常是文案，而那是會下架的等級。
+        //
+        // 這不是假想的風險。移除 Mode B 的時候，兩句「曾經為真」的話
+        // 在沒有任何人動到它們的情況下變成了不實陳述，而 146 個測試
+        // 一個都沒紅。是外部審查才發現的。
+        val screen = File("src/main/java/com/mindgohua/ui/MainScreen.kt")
+        assertTrue("找不到 MainScreen.kt", screen.exists())
+        val code = screen.readLines()
+            .map { it.substringBefore("//") }
+            .joinToString("\n")
+
+        assertFalse(
+            "「一律略過不讀」只對已移除的 Mode B 成立。Mode A 走訪系統送來的" +
+                "所有前景事件才丟棄非目標的那些 —— 「讀了才丟」不是「沒讀」。",
+            code.contains("略過不讀"),
+        )
+        assertFalse(
+            "「不寫入任何檔案」與事實不符：SettingsStore 持續在寫，" +
+                "SurvivalLog 每 60 秒寫一次，CrashLog 當機時寫。",
+            code.contains("不寫入任何檔案"),
+        )
+        assertFalse(
+            "設定頁不該再提到已經不存在的無障礙服務。",
+            code.contains("無障礙"),
+        )
     }
 
     @Test
