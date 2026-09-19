@@ -248,3 +248,69 @@ R8 未開（release APK 18.73 MB，其中 18.16 MB 是 bytecode）、
 - 修掉「逃走被懲罰、按按鈕才有赦免」的誘因反轉
 
 測試 146 個，0 失敗。
+
+---
+
+## 八、使用者已拍板的決定（2026-09-20）
+
+這三項不再是開放問題，實作時直接照做。
+
+| 項目 | 決定 | 理由 |
+|---|---|---|
+| **「我正在傳訊息」給多久** | **2 分鐘** | 跟「再滑 5 分鐘」形成明顯落差。傳訊息本來就該是短的，**這個不對稱本身就是誠實測試** —— 真的在傳訊息的人夠用，想鑽漏洞的人會覺得不划算。 |
+| **成效統計預設** | **預設關閉，但在設定頁主動推薦** | 維持現有的隱私姿態（spec §0.1 不落地）。代價是要把「推薦」做得夠顯眼，否則大多數人永遠不會開，也就永遠看不到成效。 |
+| **Mode B** | **這一版完全拿掉實作，但文件保留** | 未來幾年內可能會回來做。已於 PR #10 執行：刪掉 service / detector / 設定檔 / UI，但 `ScrollRhythmAnalyzer`、`ItemAdvanceCounter` 與本文件全部留著。 |
+
+### 關於「我正在傳訊息」還沒決定的兩點
+
+- **要不要限制次數？** 傾向不硬限制，但要顯示次數讓他自己看到。
+- **要不要也按住 2 秒？** 傾向不要 —— 真的在傳訊息的人被拖 2 秒會很煩，而煩躁會轉成對 app 的敵意。
+
+---
+
+## 九、targetSdk 36 升級時發現的新風險（2026-09-20）
+
+**Android 16 的 predictive back：系統不再呼叫 `onBackPressed()`，也不再派送 `KEYCODE_BACK`。**
+
+而 `OverlayController.kt:108-111` 正是靠攔截 `KEYCODE_BACK` 防止使用者一鍵按掉貓。
+**如果這個機制失效，倒數與長按 2 秒的防馴化設計會被一顆返回鍵整個繞過。**
+
+### ✅ 已查證（2026-09-20，AOSP 原始碼層級）
+
+**結論：overlay 視窗的 `dispatchKeyEvent` 仍然收得到 `KEYCODE_BACK`，攔截不會失效。**
+
+原因是 overlay 的情況跟 Activity 不同：
+
+1. `WindowOnBackInvokedDispatcher` 是**每個 window 一個**（建在 `ViewRootImpl`
+   的建構子裡），而註冊預設 callback 的是 `Activity`。**overlay 沒有 Activity，
+   所以它的 dispatcher 裡一個 callback 都沒有。**
+2. system_server 查到「沒有 callback」之後（`BackNavigationController` 的 null 檢查），
+   WMShell 會**主動注入一顆真的返回鍵**（`BackAnimationController.injectBackKey()`）。
+3. 那顆 key 回到 `ViewRootImpl`，因為 `topCallback` 是 null，兩個分支都不進，
+   回傳 `FORWARD` → 最後走到 `mView.dispatchKeyEvent`。
+
+官方那句「`KEYCODE_BACK` is not dispatched anymore」**只對 Activity 成立** ——
+Activity 在 `onCreate` 永遠會註冊一個預設 callback，所以 `topCallback != null` 恆成立。
+
+> ⚠️ **但這是「未文件化的平台 fallback」。** Google 沒有承諾維持這個行為，
+> 而我們的目標機是 OPPO ColorOS —— 這類廠商最愛動返回鍵與手勢。
+
+**所以已經改成兩層並存**（見 `OverlayController.registerBackBlocker`）：
+API 33+ 註冊一個空的 `OnBackInvokedCallback`（`PRIORITY_OVERLAY`），
+`dispatchKeyEvent` 的攔截保留不動（minSdk 30，API 30–32 沒有這個 API）。
+一旦註冊了 callback，系統就不再 `injectBackKey()` ——
+從「靠未文件化的 fallback」變成「靠正式 API」。
+
+**仍需實機覆核**（Android 16 裝置，Reno7 驗不出來）：讓貓出現 → 按返回 →
+貓應該不動如山。**三鍵導覽與手勢導覽要各測一次**，兩者走不同程式路徑。
+>
+> 而且 **OPPO Reno7（Android 13）驗不出來** —— targetSdk 36 的行為變更
+> 只在 Android 16 以上才啟動。這一項要另外找 Android 16 的手機或模擬器。
+
+若確認失效，修法是改用 `OnBackInvokedCallback`。
+
+**另一個要注意的**：AGP 目前是 8.7.3，低於官方要求 compileSdk 36 的 8.9.0-rc01。
+實測可建置但會印警告。建議升到 8.9.1+，**但那是另一個風險，要單獨做**。
+
+> 📌 **更正兩個我先前寫錯的數字**：lint 基準線是 **5 warnings**（不是 12，
+> 那是 M1 之前的數字）；`ROADMAP.md` 記的測試數「93 → 94」也已過時。

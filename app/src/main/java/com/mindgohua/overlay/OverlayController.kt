@@ -6,9 +6,12 @@ import android.content.Intent
 import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.drawable.GradientDrawable
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
+import android.window.OnBackInvokedCallback
+import android.window.OnBackInvokedDispatcher
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.KeyEvent
@@ -47,6 +50,15 @@ class OverlayController(private val context: Context) {
     private var rootView: View? = null
     private var countdownRunnable: Runnable? = null
 
+    /**
+     * 擋返回用的 callback。見 [registerBackBlocker]。
+     *
+     * 型別直接寫 `OnBackInvokedCallback`（API 33 才有）是安全的：
+     * 欄位宣告只是個參考，不會在 API 30 的裝置上被載入 ——
+     * 真正碰到那個類別的程式碼都包在 `SDK_INT >= TIRAMISU` 的檢查後面。
+     */
+    private var backCallback: OnBackInvokedCallback? = null
+
     val isShowing: Boolean get() = rootView != null
 
     fun canDrawOverlay(): Boolean = Settings.canDrawOverlays(context)
@@ -82,16 +94,74 @@ class OverlayController(private val context: Context) {
         }
 
         runCatching { windowManager.addView(view, params) }
-            .onSuccess { rootView = view }
+            .onSuccess {
+                rootView = view
+                // 必須在 addView 成功「之後」才註冊 —— 在那之前 view 還沒 attach，
+                // findOnBackInvokedDispatcher() 會回傳 null。
+                registerBackBlocker(view)
+            }
     }
 
     fun hide() {
         countdownRunnable?.let { handler.removeCallbacks(it) }
         countdownRunnable = null
         rootView?.let { v ->
+            unregisterBackBlocker(v)
             runCatching { windowManager.removeView(v) }
         }
         rootView = null
+    }
+
+    /**
+     * 用正式 API 擋掉返回，而不是只靠 [View.dispatchKeyEvent] 攔 KEYCODE_BACK。
+     *
+     * ## 為什麼需要這一層
+     *
+     * targetSdk 36 起，predictive back 預設啟用，官方說法是系統**不再派送
+     * `KEYCODE_BACK`**。實際查 AOSP 原始碼後，overlay 視窗的情況跟 Activity 不同：
+     *
+     *  - `WindowOnBackInvokedDispatcher` 是**每個 window 一個**（建在 `ViewRootImpl`
+     *    的建構子裡），而註冊預設 callback 的是 `Activity` —— overlay 沒有 Activity，
+     *    所以它的 dispatcher 裡一個 callback 都沒有。
+     *  - system_server 查到「沒有 callback」之後，WMShell 會**主動注入一顆真的返回鍵**
+     *    （`BackAnimationController.injectBackKey()`），事件最後仍然走到
+     *    `mView.dispatchKeyEvent`。
+     *
+     * 也就是說**現況是安全的** —— 但那是一個**沒有任何文件承諾的平台 fallback**，
+     * 而且我們的目標機是 OPPO ColorOS，這類廠商最愛動返回鍵與手勢。
+     * 一旦那條 fallback 被拿掉，整套防馴化設計（倒數 + 長按 2 秒）
+     * 就會被一顆返回鍵繞過。
+     *
+     * 所以改成兩層並存：
+     *  - API 33 以上註冊一個**空的** callback（吃掉返回、什麼都不做），
+     *    用 `PRIORITY_OVERLAY` 確保贏過其他預設優先權的 callback。
+     *  - `dispatchKeyEvent` 的攔截**保留不動**：minSdk 是 30，API 30–32 沒有這個 API。
+     *
+     * 附帶好處：一旦註冊了 callback，系統就不會再 `injectBackKey()` ——
+     * 我們從「靠未文件化的 fallback」變成「靠正式 API」。
+     *
+     * 注意這與 `android:enableOnBackInvokedCallback="false"` **互斥** ——
+     * 那個退出開關會讓註冊被直接拒絕。本專案沒有設定它。
+     */
+    private fun registerBackBlocker(view: View) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
+        val dispatcher = view.findOnBackInvokedDispatcher() ?: return
+        val callback = OnBackInvokedCallback { /* 故意留空：吃掉返回，不收掉貓 */ }
+        runCatching {
+            dispatcher.registerOnBackInvokedCallback(
+                OnBackInvokedDispatcher.PRIORITY_OVERLAY,
+                callback,
+            )
+        }.onSuccess { backCallback = callback }
+    }
+
+    private fun unregisterBackBlocker(view: View) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
+        val callback = backCallback ?: return
+        runCatching {
+            view.findOnBackInvokedDispatcher()?.unregisterOnBackInvokedCallback(callback)
+        }
+        backCallback = null
     }
 
     @SuppressLint("ClickableViewAccessibility", "SetTextI18n")
