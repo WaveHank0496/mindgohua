@@ -25,12 +25,10 @@ import com.mindgohua.core.SessionEvent
 import com.mindgohua.detect.Detector
 import com.mindgohua.detect.DetectorDebug
 import com.mindgohua.detect.DetectorDebugBus
-import com.mindgohua.detect.ScrollAccessibilityDetector
 import com.mindgohua.detect.UsageStatsDetector
 import com.mindgohua.overlay.CounterHud
 import com.mindgohua.overlay.OverlayController
 import com.mindgohua.settings.AppSettings
-import com.mindgohua.settings.DetectionMode
 import com.mindgohua.settings.SettingsStore
 import com.mindgohua.settings.TargetApps
 import com.mindgohua.stats.DailyStatsStore
@@ -38,7 +36,6 @@ import com.mindgohua.stats.GapInfo
 import com.mindgohua.stats.SurvivalAlert
 import com.mindgohua.stats.SurvivalLog
 import com.mindgohua.ui.MainActivity
-import java.util.Locale
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -102,7 +99,6 @@ class GatekeeperService : Service() {
                 Intent.ACTION_SCREEN_OFF -> {
                     when (val d = detector) {
                         is UsageStatsDetector -> d.forceLeaveTarget(::handleSignal)
-                        is ScrollAccessibilityDetector -> d.forceLeaveTarget(::handleSignal)
                         else -> Unit
                     }
                     hideOverlayOnMain()
@@ -181,12 +177,9 @@ class GatekeeperService : Service() {
     private fun startDetection(settings: AppSettings) {
         detector?.stop()
         engine = SessionEngine(settings.toEngineConfig())
-        detector = when (settings.mode) {
-            DetectionMode.PRIVACY -> UsageStatsDetector(applicationContext, scope, settings)
-            DetectionMode.FOCUS -> ScrollAccessibilityDetector(applicationContext, scope, settings).apply {
-                onItemAdvance = { pkg, delta -> onItemsAdvanced(pkg, delta) }
-            }
-        }
+        // v1 只剩一種偵測器。原本這裡依 settings.mode 在 UsageStats 與
+        // AccessibilityService 兩條路之間切換，後者已隨 Mode B 一起移除。
+        detector = UsageStatsDetector(applicationContext, scope, settings)
         detector?.start(::handleSignal)
         startCountingIfNeeded(settings)
         Log.i(TAG, "偵測啟動：mode=${settings.mode}")
@@ -275,7 +268,11 @@ class GatekeeperService : Service() {
 
     private fun startCountingIfNeeded(settings: AppSettings) {
         flushJob?.cancel()
-        if (!settings.statsEnabled || settings.mode != DetectionMode.FOCUS) {
+        // 計數的資料來源（捲動事件的 index 欄位）隨 Mode B 一起移除了，
+        // 所以這條路目前不會有任何東西送進來。留著骨架是因為
+        // 「今天被打斷幾次、成功離開幾次」會改用 SessionEngine 的資料重建，
+        // 那份資料不需要任何額外權限。
+        if (!settings.statsEnabled) {
             hideHud()
             return
         }
@@ -324,7 +321,6 @@ class GatekeeperService : Service() {
 
     private fun showHudIfNeeded() {
         if (!settings.hudEnabled || !settings.statsEnabled) return
-        if (settings.mode != DetectionMode.FOCUS) return
         scope.launch(Dispatchers.Main) { hud.show(todayTotal) }
     }
 
@@ -512,27 +508,19 @@ class GatekeeperService : Service() {
      * 診斷模式的通知文字。
      * 目的是讓你「一邊滑 IG 一邊下拉通知欄」就能看到判斷依據，不用切回設定頁。
      *
-     * Mode A 顯示秒數與門檻：平常的通知只到分鐘（免得每 2 秒重畫一次耗電），
+     * 顯示秒數與門檻：平常的通知只到分鐘（免得每 2 秒重畫一次耗電），
      * 但驗收 session 邊界（切出去再切回來計時有沒有被洗掉）時，非看到秒不可。
+     *
+     * 原本這裡還有一段 Mode B 的診斷（無障礙連線狀態、滑動密度、CV、觸發次數），
+     * 隨 Mode B 一起移除。
      */
     private fun formatDiagnostics(d: DetectorDebug, elapsedMs: Long, packageName: String?): String {
-        if (d.mode != DetectionMode.FOCUS) {
-            val threshold = settings.thresholdSeconds
-            return when {
-                elapsedMs > 0 -> "${appLabel(packageName)} ${elapsedMs / 1000} 秒 / 門檻 $threshold 秒"
-                d.inTargetApp -> "計時中 0 秒 / 門檻 $threshold 秒"
-                else -> "不在目標 app · 計時已歸零"
-            }
+        val threshold = settings.thresholdSeconds
+        return when {
+            elapsedMs > 0 -> "${appLabel(packageName)} ${elapsedMs / 1000} 秒 / 門檻 $threshold 秒"
+            d.inTargetApp -> "計時中 0 秒 / 門檻 $threshold 秒"
+            else -> "不在目標 app · 計時已歸零"
         }
-        if (!d.accessibilityConnected) return "診斷：無障礙服務未連線"
-        if (!d.inTargetApp) return "診斷：不在目標 app（事件累計 ${d.totalScrollEvents}）"
-
-        // 一律用 Locale.US 格式化數字。不指定 Locale 的話會跟著系統語言走，
-        // 而在阿拉伯文等語系下會輸出非 ASCII 的數字字元（٠١٢…），
-        // 讓這串診斷文字變得完全看不懂。這裡是給人讀數值用的，不是在地化內容。
-        val cv = if (d.coefficientOfVariation.isNaN()) "—" else String.format(Locale.US, "%.2f", d.coefficientOfVariation)
-        val status = if (d.qualifying) "符合 ${d.sustainedSeconds}s" else "未達標"
-        return "密度 ${String.format(Locale.US, "%.0f", d.densityPerMinute)}/分 · CV $cv · $status · 觸發 ${d.triggerCount}"
     }
 
     private fun buildNotification(text: String): Notification {

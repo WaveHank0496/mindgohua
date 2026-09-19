@@ -96,21 +96,17 @@
         </service>
 
         <!--
-            Mode B：只監聽 TYPE_VIEW_SCROLLED 的「時間戳」。
-            canRetrieveWindowContent 明確設為 false —— 我們不讀節點樹、不讀文字（spec §10）。
+            這裡原本宣告一個 AccessibilityService（Mode B：只讀捲動事件的時間戳，
+            canRetrieveWindowContent 明確為 false）。**v1 整個移除。**
+
+            為什麼不是「從 UI 隱藏就好」：Play 掃的是上傳的 AAB 裡的合併後 manifest，
+            不是 app 的畫面。只要這個 <service> 宣告還在，就會觸發 Permissions & APIs
+            政策的無障礙用途宣告 —— 而那是目前拒絕率最高的類別之一。
+
+            我們的用法其實很乾淨、很好辯護，但那代表要花時間去打一場
+            v1 根本不需要打的仗。演算法本身（ScrollRhythmAnalyzer、ItemAdvanceCounter）
+            留在原地，未來想做時不必重寫。
         -->
-        <service
-            android:name=".service.ScrollWatchService"
-            android:exported="false"
-            android:label="@string/accessibility_service_label"
-            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
-            <intent-filter>
-                <action android:name="android.accessibilityservice.AccessibilityService" />
-            </intent-filter>
-            <meta-data
-                android:name="android.accessibilityservice"
-                android:resource="@xml/accessibility_service_config" />
-        </service>
 
         <receiver
             android:name=".service.BootReceiver"

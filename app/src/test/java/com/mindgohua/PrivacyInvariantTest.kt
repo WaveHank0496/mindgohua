@@ -58,15 +58,22 @@ class PrivacyInvariantTest {
     }
 
     @Test
-    fun `無障礙服務不得具備讀取視窗內容的能力`() {
-        val text = accessibilityConfig.readText()
-        assertTrue(
-            "違反 spec §10：canRetrieveWindowContent 必須明確為 false",
-            text.contains("android:canRetrieveWindowContent=\"false\""),
+    fun `不得宣告任何無障礙服務`() {
+        // 這條取代了原本「無障礙服務不得讀取視窗內容」的測試 —— v1 直接把整個
+        // AccessibilityService 移除，所以要守的不再是「它有沒有規矩」，
+        // 而是「它根本不存在」。
+        //
+        // 為什麼值得用測試釘住：Play 掃的是上傳的 AAB 裡的**合併後** manifest，
+        // 不是 app 的畫面。把功能從 UI 隱藏起來對掃描結果沒有任何影響 ——
+        // 只要宣告還在，就會觸發無障礙用途宣告，而那是拒絕率最高的類別之一。
+        val text = manifest.readText()
+        assertFalse(
+            "manifest 宣告了 AccessibilityService —— v1 不該有，見 AndroidManifest 裡的說明",
+            text.contains("android.accessibilityservice.AccessibilityService"),
         )
         assertFalse(
-            "違反 spec §10：不得監聽捲動以外的事件型別",
-            text.contains("typeWindowContentChanged") || text.contains("typeAllMask"),
+            "manifest 宣告了 BIND_ACCESSIBILITY_SERVICE",
+            text.contains("BIND_ACCESSIBILITY_SERVICE"),
         )
     }
 

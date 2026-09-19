@@ -14,7 +14,6 @@ import com.mindgohua.diagnostics.CrashLog
 import com.mindgohua.overlay.OverlayController
 import com.mindgohua.service.GatekeeperService
 import com.mindgohua.settings.AppSettings
-import com.mindgohua.settings.DetectionMode
 import com.mindgohua.settings.InstalledApps
 import com.mindgohua.settings.SettingsStore
 import com.mindgohua.settings.TargetApps
@@ -131,7 +130,6 @@ class MainActivity : ComponentActivity() {
             overlay = Permissions.canDrawOverlay(this),
             notifications = Permissions.hasNotificationPermission(this),
             batteryUnrestricted = Permissions.isIgnoringBatteryOptimizations(this),
-            accessibility = Permissions.isAccessibilityServiceEnabled(this),
             oem = Permissions.oemProfile(),
         )
     }
@@ -177,10 +175,8 @@ class MainActivity : ComponentActivity() {
             }
         },
         onOpenBattery = { safeStart(Permissions.batteryOptimizationIntent(this)) },
-        onOpenAccessibility = { safeStart(Permissions.accessibilitySettingsIntent()) },
         onOpenAutoStart = { Permissions.openAutoStartSettings(this) },
         onTestInterrupt = { showPreviewOverlay(InterruptReason.DURATION) },
-        onTestFocusInterrupt = { showPreviewOverlay(InterruptReason.SCROLL_RHYTHM) },
         onClearStats = { lifecycleScope.launch { stats.clearAll() } },
         onResetSurvival = { lifecycleScope.launch { survival.reset() } },
         onExportDiagnostics = {
@@ -243,7 +239,6 @@ data class PermissionState(
     val overlay: Boolean = false,
     val notifications: Boolean = false,
     val batteryUnrestricted: Boolean = false,
-    val accessibility: Boolean = false,
     /**
      * 這台手機的廠牌對策。決定「讓貓活著」那張卡要顯示哪家的操作步驟。
      * 預設給保守的 GENERIC，而不是 OPPO —— 預設值也是一種假設，
@@ -293,20 +288,17 @@ data class ScreenActions(
     val onOpenOverlay: () -> Unit,
     val onRequestNotifications: () -> Unit,
     val onOpenBattery: () -> Unit,
-    val onOpenAccessibility: () -> Unit,
     val onOpenAutoStart: () -> Unit,
     val onTestInterrupt: () -> Unit,
-    val onTestFocusInterrupt: () -> Unit,
     val onClearStats: () -> Unit,
     val onResetSurvival: () -> Unit,
     val onExportDiagnostics: () -> Unit,
     val onClearDiagnostics: () -> Unit,
 )
 
-/** 開關能不能打開：Mode A 需要 usage access + overlay；Mode B 多要無障礙。 */
+/** 開關能不能打開：需要 usage access + overlay，以及至少選一個 app。 */
 fun AppSettings.missingRequirements(state: PermissionState): List<String> = buildList {
     if (!state.overlay) add("懸浮視窗權限")
     if (!state.usageAccess) add("使用情況存取權")
-    if (mode == DetectionMode.FOCUS && !state.accessibility) add("無障礙服務")
     if (targetPackages.isEmpty()) add("至少選一個目標 app")
 }
