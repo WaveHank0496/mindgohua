@@ -268,11 +268,18 @@ class GatekeeperService : Service() {
 
     private fun startCountingIfNeeded(settings: AppSettings) {
         flushJob?.cancel()
-        // 計數的資料來源（捲動事件的 index 欄位）隨 Mode B 一起移除了，
-        // 所以這條路目前不會有任何東西送進來。留著骨架是因為
-        // 「今天被打斷幾次、成功離開幾次」會改用 SessionEngine 的資料重建，
-        // 那份資料不需要任何額外權限。
-        if (!settings.statsEnabled) {
+        // 計數的資料來源（捲動事件的 index 欄位）隨 Mode B 一起移除了。
+        //
+        // 原本這裡只擋 statsEnabled，於是曾經開過統計的舊使用者升級後，
+        // 這個 coroutine 會每 15 秒醒來 flush 一次**永遠是空的**快照；
+        // 而且 prune() 是無條件的 DataStore.edit{}，每次服務啟動與每次換日
+        // 都會實際寫一次磁碟。
+        //
+        // 「之後改用 SessionEngine 的資料重建成效卡片」是計畫，而計畫應該
+        // 寫在文件裡（見 docs/SPEC-下一階段.md 第四節），**不該以一個空轉的
+        // coroutine 的形式活在 runtime**。
+        val countingPossible = false
+        if (!countingPossible || !settings.statsEnabled) {
             hideHud()
             return
         }
@@ -319,9 +326,21 @@ class GatekeeperService : Service() {
     private fun today(): LocalDate =
         DayBoundary.dayOf(System.currentTimeMillis(), settings.dayBoundaryHour)
 
+    /**
+     * **目前一律不顯示。**
+     *
+     * HUD 上那個數字（`todayTotal`）唯一的遞增路徑是 [onItemsAdvanced]，
+     * 而它的呼叫端（捲動事件的 index 欄位）隨 Mode B 一起被刪了 —— 數字是死的。
+     *
+     * 而 `hudEnabled` 與 `statsEnabled` 是**兩個獨立的布林值，原封不動留在
+     * 舊使用者的磁碟上**。刪除 Mode B 之前它們被「mode != FOCUS」擋著；
+     * 那道閘門一拿掉，曾經開過這個功能的人升級後就會在 IG 上看到一個
+     * **永遠不動、而且設定頁已經沒有開關能關掉**的浮層。
+     *
+     * 這是刪 UI 卻沒有一併處理它所控制的狀態，典型的後果。
+     */
     private fun showHudIfNeeded() {
-        if (!settings.hudEnabled || !settings.statsEnabled) return
-        scope.launch(Dispatchers.Main) { hud.show(todayTotal) }
+        hideHud()
     }
 
     private fun hideHud() {

@@ -198,7 +198,12 @@ private fun PrivacyCard(settings: AppSettings) {
             "✘ 畫面上的任何文字、圖片、影片",
             "✘ 你看了誰的貼文、按了什麼",
             "✘ 帳號、聯絡人、通知內容",
-            "✘ 非目標 app 的任何事（一律略過不讀）",
+            // 原本這裡寫「一律略過不讀」。那句話**只對 Mode B 成立** ——
+            // 它靠系統層的 serviceInfo.packageNames 過濾。Mode A 不是那樣運作的：
+            // UsageStatsDetector.pump() 走訪系統送來的**所有** app 的前景事件，
+            // 判斷不是目標就丟掉。「讀了才丟」與「根本沒讀」是兩件事，
+            // 而這種句子最容易被原封不動複製進隱私政策。
+            "✘ 非目標 app 的事件讀完立刻丟棄，不處理、不記錄、不留痕跡",
         )
         seen.forEach { Text(it, fontSize = 14.sp) }
         notSeen.forEach { Text(it, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }
@@ -211,7 +216,11 @@ private fun PrivacyCard(settings: AppSettings) {
                     "日期 + app 名稱 + 一個數字，沒有時間點也沒有內容。" +
                     "本 app 沒有宣告網路權限 —— 就算程式想傳，系統也不會讓它連線。"
             } else {
-                "所有判斷都在這台手機上完成、當場丟棄，不寫入任何檔案。" +
+                // 原本寫「不寫入任何檔案」，但這個 app 一直在寫：設定、
+                // 每 60 秒一次的服務存活時間戳、當機紀錄。精確的說法是
+                // 「跟你看了什麼有關的東西不寫」。
+                "偵測到的內容（哪個 app 在前景、你何時滑動）判斷完立刻丟棄，" +
+                    "不寫入檔案。寫進手機的只有你的設定，以及服務有沒有正常運作的紀錄。" +
                     "本 app 沒有宣告網路權限 —— 就算程式想傳，系統也不會讓它連線。"
             },
             fontSize = 13.sp,
@@ -985,6 +994,20 @@ private fun TestCard(settings: AppSettings, actions: ScreenActions) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         OutlinedButton(onClick = actions.onTestInterrupt) { Text("看看貓長什麼樣") }
+
+        Spacer(Modifier.height(8.dp))
+        // 這顆按鈕原本在「每日滑動計數」卡片上，而那張卡片隨 Mode B 一起刪了 ——
+        // 於是已經寫進磁碟的計數變成**使用者再也刪不掉**的東西。
+        //
+        // 那個功能當初正當化「寫入磁碟」的理由就是「使用者可以自己清除」。
+        // 刪掉入口等於片面收回那個承諾，所以按鈕必須留著，
+        // 直到那些資料本身被清乾淨為止。
+        Text(
+            "舊版的每日計數功能已移除，但先前寫入的紀錄還在手機上。",
+            fontSize = 12.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        OutlinedButton(onClick = actions.onClearStats) { Text("清除先前的計數紀錄") }
 
         Spacer(Modifier.height(8.dp))
         DiagnosticsToggle(settings, actions)

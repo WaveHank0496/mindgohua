@@ -117,6 +117,40 @@ class PrivacyInvariantTest {
     }
 
     @Test
+    fun `隱私文案不得宣稱做不到的事`() {
+        // 為什麼這條值得用測試守住：
+        //
+        // 這幾句話寫在設定頁的「這個 app 看得到什麼」卡片上，是最容易被
+        // 原封不動複製進隱私政策與商店說明的那種句子。而 Play 會比對
+        // 商店說明、app 內文案、Data Safety 表單三者是否一致 ——
+        // 不一致時被抓的通常是文案，而那是會下架的等級。
+        //
+        // 這不是假想的風險。移除 Mode B 的時候，兩句「曾經為真」的話
+        // 在沒有任何人動到它們的情況下變成了不實陳述，而 146 個測試
+        // 一個都沒紅。是外部審查才發現的。
+        val screen = File("src/main/java/com/mindgohua/ui/MainScreen.kt")
+        assertTrue("找不到 MainScreen.kt", screen.exists())
+        val code = screen.readLines()
+            .map { it.substringBefore("//") }
+            .joinToString("\n")
+
+        assertFalse(
+            "「一律略過不讀」只對已移除的 Mode B 成立。Mode A 走訪系統送來的" +
+                "所有前景事件才丟棄非目標的那些 —— 「讀了才丟」不是「沒讀」。",
+            code.contains("略過不讀"),
+        )
+        assertFalse(
+            "「不寫入任何檔案」與事實不符：SettingsStore 持續在寫，" +
+                "SurvivalLog 每 60 秒寫一次，CrashLog 當機時寫。",
+            code.contains("不寫入任何檔案"),
+        )
+        assertFalse(
+            "設定頁不該再提到已經不存在的無障礙服務。",
+            code.contains("無障礙"),
+        )
+    }
+
+    @Test
     fun `不得引入需要網路的函式庫`() {
         // 只看實際的相依宣告，註解裡提到這些名字（例如「不要用 analytics SDK」）不算。
         val text = buildFile.readLines()
