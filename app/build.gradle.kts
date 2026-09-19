@@ -29,24 +29,34 @@ val keystoreProperties = Properties().apply {
 
 android {
     namespace = "com.mindgohua"
-    compileSdk = 35
+    // compileSdk 必須 >= targetSdk，否則 AGP 直接拒編。
+    // 這裡跟著 targetSdk 一起升到 36（Android 16）。
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.mindgohua"
         // 目標實機是 OPPO Reno7 5G（ColorOS on Android 11+）
         minSdk = 30
 
-        // Play 對新上架 app 要求 targetSdk 35。
+        // Play 自 2026-08-31 起，新上架與更新一律要求 targetSdk 36（Android 16）。
+        // 停在 35 的話連上傳都會被擋 —— 這是唯一會卡住上架本身的問題。
         //
-        // 這不只是一個數字 —— targetSdk 35 會啟用 Android 15 的行為變更，其中
-        // 對本 app 最有影響的是**強制邊到邊顯示**：系統不再自動幫畫面避開狀態列，
-        // 而 android:statusBarColor / navigationBarColor 這類屬性同時失效
-        //（res/values/themes.xml 裡那行透明狀態列設定因此變成無作用）。
+        // 這不只是一個數字。targetSdk 36 會啟用 Android 16 的行為變更，
+        // 其中對本 app 最有影響的是**預設啟用 predictive back**：
+        // 系統不再呼叫 onBackPressed()，也**不再派送 KeyEvent.KEYCODE_BACK**。
         //
-        // 設定頁用 Material3 Scaffold + innerPadding，Scaffold 預設會把系統列
-        // 留白算進 innerPadding，理論上不受影響；但 overlay 與 HUD 是自己管
-        // WindowManager 的，只能靠實機確認。見 docs/ROADMAP.md 的實機驗收清單。
-        targetSdk = 35
+        // 這正好打中 overlay 的防線：OverlayController 攔截返回鍵（不然一鍵 back
+        // 就把打斷跳過了）靠的就是 dispatchKeyEvent 收 KEYCODE_BACK。官方文件
+        // 只描述 Activity 的情況，沒有說明 WindowManager 加上去的
+        // TYPE_APPLICATION_OVERLAY 視窗是否同樣受影響 —— 查不到答案，
+        // 只能實機驗證。若失效，overlay 會變成 back 一按就穿過去。
+        //
+        // 邊到邊顯示在 35 就已強制，36 只是移除 windowOptOutEdgeToEdgeEnforcement
+        // 這個退出開關；本專案從未使用該屬性，預期無額外變化。
+        //
+        // 其餘 36 的變更（大螢幕方向/尺寸限制、健康權限、本機網路權限）
+        // 與本 app 無關：手機單一裝置、不讀感測器、且刻意沒有 INTERNET 權限。
+        targetSdk = 36
         versionCode = 1
         versionName = "0.1-prototype"
 
