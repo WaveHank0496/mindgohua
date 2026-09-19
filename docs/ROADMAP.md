@@ -101,6 +101,32 @@ GitHub 的 ubuntu runner 本來就預裝 Android SDK 且授權已接受，這個
       overlay、倒數、長按解除、診斷卡片皆正常
 - [ ] 版本號規則：`versionCode` 自動遞增、`versionName` 語意化
 - [ ] 開啟 R8 程式碼壓縮並確認不會壓壞 Compose / DataStore
+- [x] 清掉 targetSdk 35 之後已失效的 `android:statusBarColor`
+- [x] 修掉 6 處 `DefaultLocale` 與 1 處 `DataExtractionRules` 警告（lint 12 → 5）
+
+#### 一個藏在 lint 警告裡的真實隱私缺口
+
+`DataExtractionRules` 看起來只是格式提醒，實際上不是。
+
+`android:dataExtractionRules`（那份寫著「不備份、不轉移任何資料」的規則）
+**只有 Android 12 以上才生效**，而本專案 minSdk 是 30 —— 也就是說
+**Android 11 的使用者原本不受那份規則保護**，spec §0 的承諾在他們手機上是破的。
+
+補上 `android:fullBackupContent`（Android 11 用的舊路徑）並加進
+`PrivacyInvariantTest`：現在會檢查兩份規則都存在、且都真的排除了全部 domain，
+而不只是檔案存在。
+
+> **教訓：lint 警告不只是「風格建議」。**
+> 分類名稱看起來無害的那幾條，有時候指的是真的會傷到使用者的東西。
+
+`DefaultLocale` 那 6 處也不是純風格問題：`String.format` 不指定 Locale 會
+跟著系統語言走，在阿拉伯文等語系下會輸出非 ASCII 的數字字元（٠١٢…），
+讓診斷數值變得完全看不懂。
+
+剩下的 5 項 `GradleDependency` 是相依版本升級，**需要實機驗證才敢動**，
+留到手機能接回來的時候處理。
+
+**測試數：93 → 94。**
 
 **R8 的實際效益（已量測）：** release APK 18.73 MB，其中 **18.16 MB 是 dex**，
 原生函式庫四個 ABI 合計只有 0.06 MB。也就是說體積幾乎全是 bytecode，

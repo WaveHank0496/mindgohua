@@ -14,6 +14,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import java.util.Locale
 
 /**
  * Mode B：Focus Mode（spec §1、§4）。
@@ -169,8 +170,10 @@ class ScrollAccessibilityDetector(
 
     override fun debugState(): String {
         val r = lastResult ?: return "Mode B · 尚無資料"
-        val cv = if (r.coefficientOfVariation.isNaN()) "—" else String.format("%.2f", r.coefficientOfVariation)
-        return "Mode B · 密度 ${String.format("%.1f", r.densityPerMinute)}/分 · CV $cv · " +
+        // Locale.US：見 GatekeeperService.formatDiagnostics 的說明 ——
+        // 跟著系統語言走會讓數字在某些語系下變成非 ASCII 字元。
+        val cv = if (r.coefficientOfVariation.isNaN()) "—" else String.format(Locale.US, "%.2f", r.coefficientOfVariation)
+        return "Mode B · 密度 ${String.format(Locale.US, "%.1f", r.densityPerMinute)}/分 · CV $cv · " +
             (if (r.qualifying) "持續 ${r.sustainedMs / 1000}s" else "未達標")
     }
 

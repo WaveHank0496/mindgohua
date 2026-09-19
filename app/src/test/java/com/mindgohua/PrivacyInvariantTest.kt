@@ -46,6 +46,45 @@ class PrivacyInvariantTest {
     }
 
     @Test
+    fun `不得備份任何資料 —— 包含 Android 11`() {
+        // android:dataExtractionRules 只有 Android 12 以上才生效，
+        // 而本專案 minSdk 是 30（Android 11）。少了 fullBackupContent，
+        // 「設定不出這台手機」這個承諾在 Android 11 使用者身上是破的。
+        //
+        // allowBackup 已經是 false，這裡是第二道防線 ——
+        // 隱私保證不該只靠單一個布林值撐著。
+        val text = manifest.readText()
+
+        assertTrue(
+            "違反 spec §0：allowBackup 必須明確為 false",
+            text.contains("android:allowBackup=\"false\""),
+        )
+        assertTrue(
+            "Android 12 以上的備份規則遺失",
+            text.contains("android:dataExtractionRules="),
+        )
+        assertTrue(
+            "Android 11 的備份規則遺失 —— dataExtractionRules 對 API 30 無效",
+            text.contains("android:fullBackupContent="),
+        )
+
+        // 兩份規則都必須真的排除所有 domain，不能只是存在而內容是空的。
+        listOf(
+            File("src/main/res/xml/data_extraction_rules.xml"),
+            File("src/main/res/xml/backup_rules.xml"),
+        ).forEach { rules ->
+            assertTrue("找不到 ${rules.name}", rules.exists())
+            val body = rules.readText()
+            listOf("root", "database", "sharedpref", "file", "external").forEach { domain ->
+                assertTrue(
+                    "${rules.name} 沒有排除 domain=$domain",
+                    body.contains("domain=\"$domain\""),
+                )
+            }
+        }
+    }
+
+    @Test
     fun `不得引入需要網路的函式庫`() {
         // 只看實際的相依宣告，註解裡提到這些名字（例如「不要用 analytics SDK」）不算。
         val text = buildFile.readLines()

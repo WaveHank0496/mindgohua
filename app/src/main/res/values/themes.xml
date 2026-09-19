@@ -2,7 +2,12 @@
 <resources>
     <!-- 用平台 Material 主題，避免多拉一個 material components 依賴。Compose 自行處理配色。 -->
     <style name="Theme.Mindgohua" parent="@android:style/Theme.Material.Light.NoActionBar">
-        <item name="android:statusBarColor">@android:color/transparent</item>
+        <!--
+            原本這裡有 android:statusBarColor。targetSdk 提到 35 之後，
+            Android 15 強制邊到邊顯示，那個屬性變成**沒有作用的宣告** ——
+            留著會讓人以為狀態列顏色是由這裡控制的，實際上不是。
+            配色一律交給 Compose 處理（見 MindgohuaTheme）。
+        -->
         <item name="android:windowBackground">@android:color/white</item>
     </style>
 </resources>
