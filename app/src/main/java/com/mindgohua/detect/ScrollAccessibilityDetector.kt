@@ -136,6 +136,17 @@ class ScrollAccessibilityDetector(
         analyzer.config = settings.toRhythmConfig()
     }
 
+    /**
+     * 轉發給內部的前景偵測器。
+     *
+     * Mode B 自己是事件驅動的（等無障礙服務送捲動事件），螢幕關著時本來就
+     * 收不到事件、不耗電；但它內部組合的 [UsageStatsDetector] 仍然在輪詢，
+     * 那一份必須跟著停，否則 Mode B 的省電完全沒有發生。
+     */
+    override fun setScreenOn(on: Boolean) {
+        foregroundDelegate.setScreenOn(on)
+    }
+
     fun forceLeaveTarget(onSignal: (SessionEvent) -> Unit) {
         analyzer.reset()
         inTargetApp = false

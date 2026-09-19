@@ -2,10 +2,13 @@ package com.mindgohua.ui
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -17,7 +20,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
@@ -46,6 +51,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -398,54 +404,97 @@ private fun TargetAppsCard(
 
 @Composable
 private fun ThresholdCard(settings: AppSettings, actions: ScreenActions) {
+    // 哪一個項目正在編輯。null = 沒有對話框開著。
+    var editing by remember { mutableStateOf<String?>(null) }
+
     SectionCard("什麼時候打斷") {
-        LabeledSlider(
+        DurationRow(
             label = "連續使用超過",
-            valueText = "${settings.thresholdSeconds / 60} 分 ${settings.thresholdSeconds % 60} 秒",
-            value = settings.thresholdSeconds.toFloat(),
-            range = 30f..3600f,
-            steps = 118, // 每 30 秒一格
-            onChange = { v ->
-                val snapped = (v / 30f).roundToInt() * 30
-                actions.onSettingsChange { it.setThresholdSeconds(snapped) }
-            },
+            valueText = DurationInput.format(settings.thresholdSeconds),
+            onClick = { editing = "threshold" },
         )
-        LabeledSlider(
+        Text(
+            "研究把介入點放在「連續滑 15 分鐘」：大多數人要到 10～20 分鐘後" +
+                "才開始對自己的使用產生負面感受。太早打斷，換來的只是反彈。",
+            fontSize = 12.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        DurationRow(
             label = "切出去多久內回來算同一段",
-            valueText = "${settings.cooldownSeconds} 秒",
-            value = settings.cooldownSeconds.toFloat(),
-            range = 0f..60f,
-            steps = 11,
-            onChange = { v ->
-                val snapped = (v / 5f).roundToInt() * 5
-                actions.onSettingsChange { it.setCooldownSeconds(snapped) }
-            },
+            valueText = DurationInput.format(settings.cooldownSeconds),
+            onClick = { editing = "cooldown" },
         )
         Text(
             "切出去瞄一眼通知再切回來，不該把計時洗掉。",
             fontSize = 12.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        LabeledSlider(
+        DurationRow(
             label = "解除後多久內不再打斷",
-            valueText = "${settings.graceMinutes} 分鐘",
-            value = settings.graceMinutes.toFloat(),
-            range = 1f..30f,
-            steps = 28,
-            onChange = { v -> actions.onSettingsChange { it.setGraceMinutes(v.roundToInt()) } },
-        )
-        LabeledSlider(
-            label = "貓出現後幾秒才能按按鈕",
-            valueText = "${settings.unlockDelaySeconds} 秒",
-            value = settings.unlockDelaySeconds.toFloat(),
-            range = 0f..10f,
-            steps = 9,
-            onChange = { v -> actions.onSettingsChange { it.setUnlockDelaySeconds(v.roundToInt()) } },
+            valueText = DurationInput.format(settings.graceMinutes * 60),
+            onClick = { editing = "grace" },
         )
         Text(
-            "這個延遲是刻意的：秒點就消失的按鈕，兩週後會退化成反射動作。",
+            "被打斷之後，平均還會再滑 3 分半才真的停下來。在這段尾巴裡再跳一次貓" +
+                "只會惹人厭，所以這個值建議不要低於 5 分鐘。",
             fontSize = 12.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        DurationRow(
+            label = "貓出現後幾秒才能按按鈕",
+            valueText = DurationInput.format(settings.unlockDelaySeconds),
+            onClick = { editing = "unlock" },
+        )
+        Text(
+            "這個延遲是刻意的：秒點就消失的按鈕，兩週後會退化成反射動作。" +
+                "不過幾秒鐘就夠了 —— 真正有效的是「可以不進去」這個選項本身，不是讓你等更久。",
+            fontSize = 12.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+
+    when (editing) {
+        "threshold" -> DurationInputDialog(
+            title = "連續使用超過多久打斷",
+            initialSeconds = settings.thresholdSeconds,
+            minSeconds = 30,
+            maxSeconds = 3600,
+            presetSeconds = listOf(300, 600, 900, 1200, 1800),
+            onDismiss = { editing = null },
+            onConfirm = { v -> actions.onSettingsChange { it.setThresholdSeconds(v) } },
+        )
+
+        "cooldown" -> DurationInputDialog(
+            title = "切出去多久內回來算同一段",
+            initialSeconds = settings.cooldownSeconds,
+            minSeconds = 0,
+            maxSeconds = 60,
+            showMinutesField = false,
+            presetSeconds = listOf(0, 5, 15, 30, 60),
+            onDismiss = { editing = null },
+            onConfirm = { v -> actions.onSettingsChange { it.setCooldownSeconds(v) } },
+        )
+
+        "grace" -> DurationInputDialog(
+            title = "解除後多久內不再打斷",
+            initialSeconds = settings.graceMinutes * 60,
+            minSeconds = 60,
+            maxSeconds = 30 * 60,
+            showSecondsField = false,
+            presetSeconds = listOf(300, 600, 900, 1800),
+            onDismiss = { editing = null },
+            onConfirm = { v -> actions.onSettingsChange { it.setGraceMinutes(v / 60) } },
+        )
+
+        "unlock" -> DurationInputDialog(
+            title = "貓出現後幾秒才能按按鈕",
+            initialSeconds = settings.unlockDelaySeconds,
+            minSeconds = 0,
+            maxSeconds = 10,
+            showMinutesField = false,
+            presetSeconds = listOf(0, 3, 5, 10),
+            onDismiss = { editing = null },
+            onConfirm = { v -> actions.onSettingsChange { it.setUnlockDelaySeconds(v) } },
         )
     }
 }
@@ -502,6 +551,48 @@ private fun RhythmTuningCard(settings: AppSettings, actions: ScreenActions) {
     }
 }
 
+/**
+ * 一個「點了就跳輸入框」的設定列。
+ *
+ * 整列都是觸控目標，而且**完全沒有拖曳手勢** —— 這是重點。
+ * 原本的滑桿橫躺在一頁可以上下捲的設定裡，使用者往下捲時手指落在滑桿上，
+ * 門檻就被無聲地拖成 0。加一個 ✎ 按鈕沒有解決這件事，因為滑桿還在。
+ * 唯一的解法是把拖曳這個手勢從這張卡片上移除。
+ */
+@Composable
+private fun DurationRow(
+    label: String,
+    valueText: String,
+    onClick: () -> Unit,
+) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 12.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(label, fontSize = 14.sp, modifier = Modifier.weight(1f))
+        Spacer(Modifier.width(12.dp))
+        Text(
+            valueText,
+            fontSize = 15.sp,
+            fontWeight = FontWeight.Medium,
+            color = MaterialTheme.colorScheme.primary,
+        )
+        Spacer(Modifier.width(6.dp))
+        Text("✎", fontSize = 13.sp, color = MaterialTheme.colorScheme.primary)
+    }
+}
+
+/**
+ * 滑桿。**只剩開發用的調參卡片在用**。
+ *
+ * 使用者會碰到的時間設定已經全部改成 [DurationRow] + 鍵盤輸入。
+ * 這裡留著是因為調參那幾個值本來就是「拖一拖看感覺」的性質，
+ * 而且那張卡片預計在 M3 直接對一般使用者隱藏。
+ */
 @Composable
 private fun LabeledSlider(
     label: String,
@@ -512,7 +603,11 @@ private fun LabeledSlider(
     onChange: (Float) -> Unit,
 ) {
     Column(Modifier.fillMaxWidth()) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             Text(label, fontSize = 14.sp)
             Text(valueText, fontSize = 14.sp, fontWeight = FontWeight.Medium)
         }
@@ -523,6 +618,150 @@ private fun LabeledSlider(
             steps = steps,
         )
     }
+}
+
+/**
+ * 用鍵盤輸入一個時間值。
+ *
+ * 分、秒分成兩欄，因為門檻範圍是 30 秒～60 分鐘 ——
+ * 要使用者輸入「600 秒」而不是「10 分鐘」很不友善。
+ *
+ * 解析與驗證的規則全在 [DurationInput]（純函式、18 個單元測試），
+ * 這裡只負責把字串收進來、把結果送出去。
+ */
+@Composable
+private fun DurationInputDialog(
+    title: String,
+    initialSeconds: Int,
+    minSeconds: Int,
+    maxSeconds: Int,
+    onDismiss: () -> Unit,
+    onConfirm: (Int) -> Unit,
+    showMinutesField: Boolean = true,
+    showSecondsField: Boolean = true,
+    /** 常用值。空的就不顯示那一排按鈕。 */
+    presetSeconds: List<Int> = emptyList(),
+) {
+    var minutesText by remember {
+        mutableStateOf(if (showMinutesField) (initialSeconds / 60).toString() else "")
+    }
+    var secondsText by remember {
+        mutableStateOf(
+            when {
+                !showSecondsField -> ""
+                // 只有秒欄時，整個值都放在秒欄（冷卻上限是 60 秒，不能被 %60 變成 0）。
+                !showMinutesField -> initialSeconds.toString()
+                else -> (initialSeconds % 60).toString()
+            },
+        )
+    }
+
+    // 只有秒欄時不能走分秒合成 —— 那條路會把秒夾在 0..59，
+    // 而「60 秒」是合法的冷卻值。
+    fun parsed(): Int? =
+        if (!showMinutesField) {
+            DurationInput.parse(secondsText, minSeconds, maxSeconds)
+        } else {
+            DurationInput.parseMinutesSeconds(
+                minutesText = minutesText,
+                secondsText = if (showSecondsField) secondsText else "",
+                minTotalSeconds = minSeconds,
+                maxTotalSeconds = maxSeconds,
+            )
+        }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    if (showMinutesField) {
+                        OutlinedTextField(
+                            value = minutesText,
+                            onValueChange = { minutesText = it },
+                            label = { Text("分") },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                    if (showSecondsField) {
+                        OutlinedTextField(
+                            value = secondsText,
+                            onValueChange = { secondsText = it },
+                            label = { Text("秒") },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                }
+
+                if (presetSeconds.isNotEmpty()) {
+                    // 常用值一鍵帶入。滑桿唯一比輸入框強的地方就是「快速粗調」，
+                    // 用按鈕一樣做得到，而且不會在捲動頁面時被誤觸。
+                    Row(
+                        modifier = Modifier.horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        presetSeconds.forEach { preset ->
+                            OutlinedButton(
+                                onClick = {
+                                    if (showMinutesField) {
+                                        minutesText = (preset / 60).toString()
+                                        secondsText = (preset % 60).toString()
+                                    } else {
+                                        secondsText = preset.toString()
+                                    }
+                                },
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+                            ) {
+                                Text(DurationInput.format(preset), fontSize = 12.sp)
+                            }
+                        }
+                    }
+                }
+
+                Text(
+                    "可輸入範圍：${DurationInput.format(minSeconds)} ～ ${DurationInput.format(maxSeconds)}",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+
+                // 按下確定之前就先告訴你會存成什麼。
+                // 夾範圍是靜悄悄發生的，不講的話使用者會以為自己打的數字被吃掉了。
+                val preview = parsed()
+                Text(
+                    if (preview == null) {
+                        "這樣的輸入看不懂，按確定不會改動原本的值。"
+                    } else {
+                        "會存成：${DurationInput.format(preview)}"
+                    },
+                    fontSize = 12.sp,
+                    color = if (preview == null) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.primary
+                    },
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                // 解析不出來就什麼都不改 —— 這正是這次要修掉的那種
+                // 「使用者沒想改，值卻變了」的情況。
+                parsed()?.let(onConfirm)
+                onDismiss()
+            }) { Text("確定") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("取消") }
+        },
+    )
 }
 
 @Composable

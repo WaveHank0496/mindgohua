@@ -26,6 +26,17 @@ interface Detector {
     /** 使用者改了設定（目標 app、門檻、調參）。 */
     fun onSettingsChanged(settings: AppSettings)
 
+    /**
+     * 螢幕亮了或暗了。
+     *
+     * 螢幕關著時使用者不可能在滑手機，任何輪詢都是白做的 ——
+     * 實作端應該在這時停止主動查詢（見 [PollingPolicy]）。
+     *
+     * 預設不做任何事：事件驅動的偵測器（例如無障礙服務）本來就不會在
+     * 螢幕關閉時收到事件，不需要特別處理。
+     */
+    fun setScreenOn(on: Boolean) = Unit
+
     /** 給偵錯畫面看的一行狀態文字。不含任何使用者內容。 */
     fun debugState(): String = ""
 }

@@ -1,5 +1,6 @@
 package com.mindgohua.settings
 
+import android.content.Context
 import com.mindgohua.core.EngineConfig
 import com.mindgohua.core.RhythmConfig
 
@@ -133,4 +134,27 @@ object TargetApps {
             ?: knownLabels[packageName]
             ?: packageName
             ?: "這個 app"
+
+    /**
+     * 向系統問這個套件的顯示名稱。
+     *
+     * 為什麼需要它：[knownLabels] 只有七個常見 app，而使用者現在可以挑
+     * 手機上**任何** app。名單外的一律退回顯示套件名 —— 於是 Threads 在
+     * 常駐通知上會變成「com.instagram.barcelona：已連續 3 分鐘」，
+     * 沒有人看得懂那是什麼。
+     *
+     * 設定頁沒有這個問題，因為它有 PackageManager 查來的清單可用
+     * （見 `InstalledAppsState`）。問題只出在拿不到那份清單的地方：
+     * 常駐通知與 overlay。
+     *
+     * 查詢會碰 IPC，結果由呼叫端自行快取（套件名→名稱的對應幾乎不會變）。
+     */
+    fun labelOf(context: Context, packageName: String?): String {
+        if (packageName == null) return "這個 app"
+        val resolved = runCatching {
+            val pm = context.packageManager
+            pm.getApplicationLabel(pm.getApplicationInfo(packageName, 0)).toString()
+        }.getOrNull()
+        return labelOf(packageName, resolved)
+    }
 }

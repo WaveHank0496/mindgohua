@@ -128,7 +128,9 @@ class OverlayController(private val context: Context) {
         val minutes = elapsedMs / 60_000
         val seconds = (elapsedMs % 60_000) / 1000
         val duration = if (minutes > 0) "$minutes 分 $seconds 秒" else "$seconds 秒"
-        val appLabel = TargetApps.labelOf(packageName)
+        // 用吃 Context 的版本向系統問真名 —— 否則名單外的 app（例如 Threads）
+        // 會在貓身上顯示成「com.instagram.barcelona」。
+        val appLabel = TargetApps.labelOf(context, packageName)
 
         val headline = TextView(context).apply {
             text = when (reason) {
