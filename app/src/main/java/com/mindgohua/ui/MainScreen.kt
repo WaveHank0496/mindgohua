@@ -177,7 +177,7 @@ private fun MasterSwitchCard(settings: AppSettings, missing: List<String>, actio
                 )
                 Text(
                     if (missing.isEmpty()) {
-                        "門檻 ${settings.thresholdSeconds / 60} 分 ${settings.thresholdSeconds % 60} 秒"
+                        "門檻 ${DurationInput.format(settings.thresholdSeconds)}"
                     } else {
                         "還缺：" + missing.joinToString("、")
                     },
