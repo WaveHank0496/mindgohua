@@ -13,8 +13,12 @@ package com.mindgohua.ui
  * 這不是小瑕疵：門檻被改成 0 代表**這個 app 會變成一進 IG 就跳貓**，
  * 或者（另一個方向）永遠不跳。而使用者不會知道發生了什麼事。
  *
- * 所以改成：滑桿保留（微調方便），但數字本身可以點，點了用鍵盤直接輸入。
- * 精確的值用打的，模糊的調整用滑的。
+ * 第一版的修法是「滑桿保留，數字加一個 ✎ 可以點」。實際用下來滑桿還是在那裡，
+ * 誤觸的結構沒有消失 —— 只是多了一條逃生路線。所以第二版直接把滑桿拿掉。
+ *
+ * 這跟業界的做法也一致：Nielsen Norman Group 的結論是滑桿只適合
+ * 「大概就好」的值，**只要確切數字重要，滑桿就不該用**；而 Material 3 的
+ * time picker 本身就內建鍵盤輸入模式。時間這種東西沒有「大概 10 分鐘」。
  *
  * ## 為什麼解析邏輯要抽出來
  *
@@ -70,5 +74,22 @@ object DurationInput {
 
         val total = minutes * 60 + seconds
         return total.coerceIn(minTotalSeconds, maxTotalSeconds)
+    }
+
+    /**
+     * 把秒數格式化成人看得懂的字串。
+     *
+     * 刻意不顯示「10 分 0 秒」這種尾巴 —— 設定頁上每一個多餘的 0
+     * 都會讓人多花半秒去確認自己有沒有看錯。
+     */
+    fun format(totalSeconds: Int): String {
+        val total = totalSeconds.coerceAtLeast(0)
+        val minutes = total / 60
+        val seconds = total % 60
+        return when {
+            minutes == 0 -> "$seconds 秒"
+            seconds == 0 -> "$minutes 分"
+            else -> "$minutes 分 $seconds 秒"
+        }
     }
 }

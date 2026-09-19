@@ -117,4 +117,39 @@ class DurationInputTest {
     fun `合成後超過上限會被夾到上限`() {
         assertEquals(3600, DurationInput.parseMinutesSeconds("999", "0", 30, 3600))
     }
+
+    // ---- 顯示格式 ----
+
+    @Test
+    fun `不足一分鐘只顯示秒`() {
+        assertEquals("45 秒", DurationInput.format(45))
+    }
+
+    @Test
+    fun `整分鐘不顯示多餘的零秒`() {
+        // 「10 分 0 秒」那個 0 沒有帶來任何資訊，只會讓人多看一眼。
+        assertEquals("10 分", DurationInput.format(600))
+        assertEquals("1 分", DurationInput.format(60))
+    }
+
+    @Test
+    fun `有分有秒兩個都顯示`() {
+        assertEquals("1 分 30 秒", DurationInput.format(90))
+    }
+
+    @Test
+    fun `零顯示成零秒而不是空字串`() {
+        // 冷卻時間允許 0，顯示成空白會讓人以為壞了。
+        assertEquals("0 秒", DurationInput.format(0))
+    }
+
+    @Test
+    fun `負數不會顯示成負的`() {
+        assertEquals("0 秒", DurationInput.format(-5))
+    }
+
+    @Test
+    fun `一小時顯示成六十分`() {
+        assertEquals("60 分", DurationInput.format(3600))
+    }
 }
