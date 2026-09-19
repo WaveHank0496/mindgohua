@@ -107,21 +107,29 @@ fun MainScreen(
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            // 使用者真正需要的七張卡片。
             MasterSwitchCard(settings, missing, actions)
             PrivacyCard(settings)
             ModeCard(settings, actions)
             TargetAppsCard(settings, installedApps, actions)
             ThresholdCard(settings, actions)
-            if (settings.mode == DetectionMode.FOCUS) {
-                DailyCountCard(settings, dailyTotals, installedApps, actions)
-                ModeBAcceptanceCard(settings, permissions, actions)
-                RhythmTuningCard(settings, actions)
-            }
             PermissionsCard(settings, permissions, actions)
-            SurvivalStatusCard(survival, settings, actions)
             SurvivalCard(permissions, actions)
-            TestCard(settings, actions)
-            DiagnosticsCard(diagnostics, actions)
+
+            // 以下是為了「驗收這個 app 自己」而存在的面板，預設收起來。
+            // 它們對開發很重要，但第一次打開這個 app 的人不該看到
+            // 滿螢幕的調參滑桿、存活紀錄與當機記錄。
+            AdvancedToggleCard(settings, actions)
+            if (settings.advancedVisible) {
+                SurvivalStatusCard(survival, settings, actions)
+                if (settings.mode == DetectionMode.FOCUS) {
+                    DailyCountCard(settings, dailyTotals, installedApps, actions)
+                    ModeBAcceptanceCard(settings, permissions, actions)
+                    RhythmTuningCard(settings, actions)
+                }
+                TestCard(settings, actions)
+                DiagnosticsCard(diagnostics, actions)
+            }
             Spacer(Modifier.height(32.dp))
         }
     }
@@ -399,6 +407,56 @@ private fun TargetAppsCard(
             fontSize = 12.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+    }
+}
+
+/**
+ * 「進階與診斷」的開關。
+ *
+ * 底下那幾張卡片是為了驗收這個 app 自己而存在的：調參滑桿、存活紀錄、
+ * 手動觸發測試、當機紀錄。它們對開發很重要 ——
+ * 但一個第一次打開這個 app 的陌生人，看到的應該是
+ * 「我要看住哪些 app、滑多久打斷我」，不是一個儀表板。
+ *
+ * 順帶一提：把這區收起來之後，**使用者看得到的畫面上就一根滑桿也沒有了**。
+ * 剩下的滑桿全在這扇門後面。
+ */
+@Composable
+private fun AdvancedToggleCard(settings: AppSettings, actions: ScreenActions) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        ),
+    ) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .clickable {
+                    actions.onSettingsChange { it.setAdvancedVisible(!settings.advancedVisible) }
+                }
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text("進階與診斷", fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+                Text(
+                    if (settings.advancedVisible) {
+                        "調參、存活紀錄、測試工具、當機紀錄"
+                    } else {
+                        "開發與除錯用的面板。平常不需要打開。"
+                    },
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Spacer(Modifier.width(12.dp))
+            Switch(
+                checked = settings.advancedVisible,
+                onCheckedChange = { v -> actions.onSettingsChange { it.setAdvancedVisible(v) } },
+            )
+        }
     }
 }
 

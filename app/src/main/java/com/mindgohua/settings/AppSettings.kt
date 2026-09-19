@@ -70,6 +70,18 @@ data class AppSettings(
     /** 保留幾天的紀錄，更舊的自動刪除。 */
     val statsRetentionDays: Int = 90,
 
+    /**
+     * 是否顯示「進階與診斷」區。
+     *
+     * **預設關閉。** 底下那幾張卡片（調參滑桿、存活紀錄、手動測試、當機紀錄）
+     * 是為了驗收這個 app 自己而存在的，不是給使用者的功能。
+     *
+     * 第一次打開這個 app 的人應該看到「我要看住哪些 app、滑多久打斷我」，
+     * 而不是一個儀表板。存進設定而不是用 UI 狀態，是因為正在測試的人
+     * 不該每次開 app 都要重新展開一次。
+     */
+    val advancedVisible: Boolean = false,
+
     // ---- Mode B 調參 ----
     val rhythmWindowSeconds: Int = 90,
     val rhythmMinDensityPerMinute: Int = 18,

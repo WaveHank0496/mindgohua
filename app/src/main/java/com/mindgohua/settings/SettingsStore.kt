@@ -34,6 +34,7 @@ class SettingsStore(private val context: Context) {
         val HUD_ENABLED = booleanPreferencesKey("hud_enabled")
         val DAY_BOUNDARY_HOUR = intPreferencesKey("day_boundary_hour")
         val STATS_RETENTION_DAYS = intPreferencesKey("stats_retention_days")
+        val ADVANCED_VISIBLE = booleanPreferencesKey("advanced_visible")
         val RHYTHM_WINDOW_SEC = intPreferencesKey("rhythm_window_seconds")
         val RHYTHM_DENSITY = intPreferencesKey("rhythm_min_density_per_minute")
         val RHYTHM_CV_PERCENT = intPreferencesKey("rhythm_max_cv_percent")
@@ -56,6 +57,7 @@ class SettingsStore(private val context: Context) {
             hudEnabled = prefs[Keys.HUD_ENABLED] ?: defaults.hudEnabled,
             dayBoundaryHour = prefs[Keys.DAY_BOUNDARY_HOUR] ?: defaults.dayBoundaryHour,
             statsRetentionDays = prefs[Keys.STATS_RETENTION_DAYS] ?: defaults.statsRetentionDays,
+            advancedVisible = prefs[Keys.ADVANCED_VISIBLE] ?: defaults.advancedVisible,
             rhythmWindowSeconds = prefs[Keys.RHYTHM_WINDOW_SEC] ?: defaults.rhythmWindowSeconds,
             rhythmMinDensityPerMinute = prefs[Keys.RHYTHM_DENSITY] ?: defaults.rhythmMinDensityPerMinute,
             rhythmMaxCvPercent = prefs[Keys.RHYTHM_CV_PERCENT] ?: defaults.rhythmMaxCvPercent,
@@ -76,6 +78,7 @@ class SettingsStore(private val context: Context) {
     suspend fun setHudEnabled(value: Boolean) = edit { it[Keys.HUD_ENABLED] = value }
     suspend fun setDayBoundaryHour(value: Int) = edit { it[Keys.DAY_BOUNDARY_HOUR] = value.coerceIn(0, 23) }
     suspend fun setStatsRetentionDays(value: Int) = edit { it[Keys.STATS_RETENTION_DAYS] = value.coerceIn(1, 365) }
+    suspend fun setAdvancedVisible(value: Boolean) = edit { it[Keys.ADVANCED_VISIBLE] = value }
     suspend fun setRhythmWindowSeconds(value: Int) = edit { it[Keys.RHYTHM_WINDOW_SEC] = value.coerceIn(15, 600) }
     suspend fun setRhythmDensity(value: Int) = edit { it[Keys.RHYTHM_DENSITY] = value.coerceIn(1, 200) }
     suspend fun setRhythmCvPercent(value: Int) = edit { it[Keys.RHYTHM_CV_PERCENT] = value.coerceIn(5, 200) }
