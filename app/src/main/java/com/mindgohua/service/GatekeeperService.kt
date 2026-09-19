@@ -450,6 +450,22 @@ class GatekeeperService : Service() {
         }
     }
 
+    /**
+     * 套件名 → 顯示名稱，附一層快取。
+     *
+     * 需要快取是因為常駐通知在計時期間會反覆重畫，每次都去問 PackageManager
+     * 等於在固定頻率做 IPC。而套件名對應的名稱幾乎不會變 —— 只有使用者
+     * 重新安裝或改語言時才會，那兩種情況服務本來就會重啟。
+     */
+    private val labelCache = mutableMapOf<String, String>()
+
+    private fun appLabel(packageName: String?): String {
+        if (packageName == null) return TargetApps.labelOf(null)
+        return labelCache.getOrPut(packageName) {
+            TargetApps.labelOf(this, packageName)
+        }
+    }
+
     private fun updateNotification(elapsedMs: Long, packageName: String?) {
         val diagnostics = DetectorDebugBus.state.value?.takeIf { settings.diagnosticsNotification }
         // 只顯示到分鐘：秒數會讓通知每 2 秒重畫一次，看不出差別卻一直在耗電。
@@ -459,7 +475,7 @@ class GatekeeperService : Service() {
             elapsedMs <= 0 -> notificationText(idle = true)
             else -> {
                 val minutes = elapsedMs / 60_000
-                val label = TargetApps.labelOf(packageName)
+                val label = appLabel(packageName)
                 if (minutes > 0) "$label：已連續 $minutes 分鐘" else "$label：計時中"
             }
         }
@@ -483,7 +499,7 @@ class GatekeeperService : Service() {
         if (d.mode != DetectionMode.FOCUS) {
             val threshold = settings.thresholdSeconds
             return when {
-                elapsedMs > 0 -> "${TargetApps.labelOf(packageName)} ${elapsedMs / 1000} 秒 / 門檻 $threshold 秒"
+                elapsedMs > 0 -> "${appLabel(packageName)} ${elapsedMs / 1000} 秒 / 門檻 $threshold 秒"
                 d.inTargetApp -> "計時中 0 秒 / 門檻 $threshold 秒"
                 else -> "不在目標 app · 計時已歸零"
             }
