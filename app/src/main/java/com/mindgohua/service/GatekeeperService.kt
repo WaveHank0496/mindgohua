@@ -384,8 +384,22 @@ class GatekeeperService : Service() {
         handleSignal(SessionEvent.InterruptDismissed(SystemClock.elapsedRealtime(), choice))
     }
 
+    /**
+     * 收掉 overlay。**必須是 `Main.immediate`，不能是 `Main`。**
+     *
+     * 差別在服務被銷毀的那條路上會要命：`onDestroy` 本身就跑在主執行緒，
+     * 它先呼叫 `stopEverything()`（裡面排了一個 hide），再呼叫 `scope.cancel()`。
+     * 用 `Dispatchers.Main` 的話那個 hide 只是被「排進佇列」，
+     * 接著就被同步取消 —— **`removeView` 永遠不會執行**。
+     *
+     * 而留在畫面上的那張 view 吃掉所有觸控、攔截返回鍵、還帶
+     * `FLAG_KEEP_SCREEN_ON`，上面兩顆按鈕也是死的（engine 已經是 null）。
+     * 使用者唯一的出路是「強制停止」或重開機。
+     *
+     * `immediate` 在已經身處主執行緒時直接同步執行，這條路就被封死了。
+     */
     private fun hideOverlayOnMain() {
-        scope.launch(Dispatchers.Main) { overlay.hide() }
+        scope.launch(Dispatchers.Main.immediate) { overlay.hide() }
     }
 
     private fun statsSettingsChanged(a: AppSettings, b: AppSettings): Boolean =
@@ -434,6 +448,11 @@ class GatekeeperService : Service() {
     override fun onDestroy() {
         stopEverything()
         runCatching { unregisterReceiver(screenReceiver) }
+        // 最後一道保險：scope 取消之後就不會再有任何 coroutine 執行，
+        // 所以在那之前同步把 view 拔掉。onDestroy 本來就在主執行緒。
+        // 貓留在畫面上是這個 app 唯一會逼使用者重開機的失敗方式，
+        // 值得用兩行重複的程式碼把它封死。
+        runCatching { overlay.hide() }
         scope.cancel()
         super.onDestroy()
     }

@@ -22,13 +22,38 @@ class PrivacyInvariantTest {
     fun `manifest 不得宣告 INTERNET 權限`() {
         assertTrue("找不到 AndroidManifest.xml", manifest.exists())
         val text = manifest.readText()
-        assertFalse(
-            "違反 spec §0.2：不得宣告 INTERNET 權限",
-            text.contains("\"android.permission.INTERNET\""),
-        )
+
+        // INTERNET 只允許以 tools:node="remove" 的形式出現 —— 那一行的作用是
+        // 叫 manifest merger 把它拔掉，是強制手段，不是宣告。
+        Regex("""<uses-permission[^>]*android:name="android\.permission\.INTERNET"[^>]*/>""")
+            .findAll(text)
+            .forEach { match ->
+                assertTrue(
+                    "違反 spec §0.2：宣告了 INTERNET 權限。" +
+                        "唯一允許的形式是 tools:node=\"remove\"。\n${match.value}",
+                    match.value.contains("tools:node=\"remove\""),
+                )
+            }
+
         assertFalse(
             "違反 spec §0.2：不得宣告 ACCESS_NETWORK_STATE",
             text.contains("\"android.permission.ACCESS_NETWORK_STATE\""),
+        )
+    }
+
+    @Test
+    fun `必須主動移除任何函式庫注入的 INTERNET 權限`() {
+        // 這道防線擋的是原始碼掃描看不見的東西：
+        // 第三方函式庫可以透過 manifest 合併把 INTERNET 加進最終的 AAB，
+        // 而「只讀 src/main/AndroidManifest.xml」的測試會全程顯示綠燈。
+        //
+        // 少了這一行，「本 app 無法連網」就從系統強制降級成君子協定。
+        val text = manifest.readText()
+        assertTrue(
+            "少了 <uses-permission android:name=\"android.permission.INTERNET\" " +
+                "tools:node=\"remove\" /> —— 沒有它，任何函式庫都能讓這個 app 連網",
+            Regex("""android:name="android\.permission\.INTERNET"[^>]*tools:node="remove"""")
+                .containsMatchIn(text),
         )
     }
 
