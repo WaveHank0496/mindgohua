@@ -21,8 +21,22 @@ data class AppSettings(
     val mode: DetectionMode = DetectionMode.PRIVACY,
     val targetPackages: Set<String> = setOf(TargetApps.INSTAGRAM),
 
-    /** 連續使用多久打斷（秒）。 */
-    val thresholdSeconds: Int = 120,
+    /**
+     * 連續使用多久打斷（秒）。
+     *
+     * **預設 10 分鐘。這個值有研究依據，不是隨便訂的。**
+     *
+     * 大多數人要到連續使用 **10～20 分鐘之後**，才開始對自己的手機使用
+     * 產生負面感受（Terzimehić & Aragon-Hahner 2022）；CHI 2025 的無限捲動
+     * 介入研究據此把介入點放在 15 分鐘。
+     *
+     * 太早打斷，使用者還不覺得自己有問題 —— 他只會覺得這個 app 很煩，
+     * 然後解除安裝。寧可漏掉幾次，也不要變成一個惹人厭的東西。
+     *
+     * 開發期間這個值曾經是 120 秒，那是為了不用真的滑十分鐘才看得到貓。
+     * 那是開發便利，不是產品決定。
+     */
+    val thresholdSeconds: Int = 600,
 
     /** 切出去多久內切回來仍算同一 session（秒）。 */
     val cooldownSeconds: Int = 10,
