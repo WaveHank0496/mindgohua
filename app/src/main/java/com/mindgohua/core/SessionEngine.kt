@@ -118,13 +118,23 @@ class SessionEngine(config: EngineConfig) {
         } else {
             when (val p = phase) {
                 is Phase.Active -> {
-                    val elapsed = p.accumulatedMs + (at - p.resumedAtMs).coerceAtLeast(0L)
-                    phase = Phase.Paused(accumulatedMs = elapsed, pausedAtMs = at, packageName = p.packageName)
-                    // 使用者已經離開目標 app，overlay 沒有理由繼續蓋著。
                     if (interruptShowing) {
+                        // 貓還蓋著，而使用者選擇直接離開目標 app。
+                        // **這正是我們希望發生的事**，它應該得到跟按下按鈕一樣的待遇。
+                        //
+                        // 原本的寫法只收掉 overlay，把已經超過門檻的累計值原封不動
+                        // 搬進 Paused，而且不給冷靜期。於是使用者在冷卻時間內切回來時，
+                        // elapsed 一開始就 >= 門檻 → 下一個 tick 立刻再跳一次貓。
+                        //
+                        // 結果是「逃走」被懲罰、「按按鈕」才有赦免 —— 誘因方向剛好相反。
+                        // 而且冷卻上限有 10 分鐘，這個窗口大到幾乎必中。
                         interruptShowing = false
+                        graceUntilMs = at + config.graceMs
+                        phase = Phase.Paused(accumulatedMs = 0L, pausedAtMs = at, packageName = p.packageName)
                         listOf(EngineEffect.HideInterrupt)
                     } else {
+                        val elapsed = p.accumulatedMs + (at - p.resumedAtMs).coerceAtLeast(0L)
+                        phase = Phase.Paused(accumulatedMs = elapsed, pausedAtMs = at, packageName = p.packageName)
                         emptyList()
                     }
                 }

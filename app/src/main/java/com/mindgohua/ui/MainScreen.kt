@@ -704,22 +704,23 @@ private fun DurationInputDialog(
     /** 常用值。空的就不顯示那一排按鈕。 */
     presetSeconds: List<Int> = emptyList(),
 ) {
-    var minutesText by remember {
+    // **key 一定要帶 initialSeconds。**
+    // 冷啟動時 DataStore 還沒讀完，settings 是預設值；使用者在那一瞬間點開
+    // 對話框，兩個欄位就會被預設值鎖死，之後真實設定讀進來也不會更新。
+    // 他什麼都沒打，按下確定卻把自己的門檻改掉了。
+    var minutesText by remember(initialSeconds) {
         mutableStateOf(if (showMinutesField) (initialSeconds / 60).toString() else "")
     }
-    var secondsText by remember {
+    var secondsText by remember(initialSeconds) {
         mutableStateOf(
             when {
                 !showSecondsField -> ""
-                // 只有秒欄時，整個值都放在秒欄（冷卻上限是 60 秒，不能被 %60 變成 0）。
                 !showMinutesField -> initialSeconds.toString()
                 else -> (initialSeconds % 60).toString()
             },
         )
     }
 
-    // 只有秒欄時不能走分秒合成 —— 那條路會把秒夾在 0..59，
-    // 而「60 秒」是合法的冷卻值。
     fun parsed(): Int? =
         if (!showMinutesField) {
             DurationInput.parse(secondsText, minSeconds, maxSeconds)
@@ -1222,10 +1223,12 @@ private fun DailyCountCard(
             valueText = "${settings.statsRetentionDays} 天",
             value = settings.statsRetentionDays.toFloat(),
             range = 7f..365f,
-            steps = 50,
+            steps = 0,
             onChange = { v ->
-                val snapped = (v / 7f).roundToInt() * 7
-                actions.onSettingsChange { it.setStatsRetentionDays(snapped) }
+                // 原本會把值吸附到 7 的倍數。但**預設值 90 不是 7 的倍數** ——
+                // 使用者只要碰一下這支滑桿，就再也回不到 90；365 同理也永遠存不進去
+                // （round(365/7)*7 = 364）。吸附帶來的整齊不值得這個代價。
+                actions.onSettingsChange { it.setStatsRetentionDays(v.roundToInt()) }
             },
         )
 

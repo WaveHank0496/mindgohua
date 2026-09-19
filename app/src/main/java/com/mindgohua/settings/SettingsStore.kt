@@ -47,10 +47,20 @@ class SettingsStore(private val context: Context) {
             enabled = prefs[Keys.ENABLED] ?: defaults.enabled,
             mode = prefs[Keys.MODE]?.let { runCatching { DetectionMode.valueOf(it) }.getOrNull() } ?: defaults.mode,
             targetPackages = prefs[Keys.TARGETS] ?: defaults.targetPackages,
-            thresholdSeconds = prefs[Keys.THRESHOLD_SEC] ?: defaults.thresholdSeconds,
-            cooldownSeconds = prefs[Keys.COOLDOWN_SEC] ?: defaults.cooldownSeconds,
-            graceMinutes = prefs[Keys.GRACE_MIN] ?: defaults.graceMinutes,
-            unlockDelaySeconds = prefs[Keys.UNLOCK_DELAY_SEC] ?: defaults.unlockDelaySeconds,
+            // 讀出來也要夾。**寫入時夾過了不代表磁碟上的值一定合法** ——
+            // 範圍改窄的時候（例如門檻從 10..7200 收成 30..3600），
+            // 舊版存下來的值會原封不動地活在磁碟上，而且沒有任何地方會發現。
+            //
+            // 那種值造成的症狀全部是無聲的：grace 讀成 0 就等於冷靜期消失，
+            // 貓可以連續跳；按鈕上還會寫「再滑 0 分鐘」。
+            thresholdSeconds = (prefs[Keys.THRESHOLD_SEC] ?: defaults.thresholdSeconds)
+                .clampTo(SettingLimits.THRESHOLD_SECONDS),
+            cooldownSeconds = (prefs[Keys.COOLDOWN_SEC] ?: defaults.cooldownSeconds)
+                .clampTo(SettingLimits.COOLDOWN_SECONDS),
+            graceMinutes = (prefs[Keys.GRACE_MIN] ?: defaults.graceMinutes)
+                .clampTo(SettingLimits.GRACE_MINUTES),
+            unlockDelaySeconds = (prefs[Keys.UNLOCK_DELAY_SEC] ?: defaults.unlockDelaySeconds)
+                .clampTo(SettingLimits.UNLOCK_DELAY_SECONDS),
             diagnosticsNotification = prefs[Keys.DIAGNOSTICS] ?: defaults.diagnosticsNotification,
             survivalAlertEnabled = prefs[Keys.SURVIVAL_ALERT] ?: defaults.survivalAlertEnabled,
             statsEnabled = prefs[Keys.STATS_ENABLED] ?: defaults.statsEnabled,

@@ -59,11 +59,23 @@ object Permissions {
         return pm.isIgnoringBatteryOptimizations(context.packageName)
     }
 
-    @SuppressLint("BatteryLife")
-    fun batteryOptimizationIntent(context: Context): Intent = Intent(
-        Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
-        Uri.parse("package:${context.packageName}"),
-    )
+    /**
+     * 電池最佳化的**清單頁**，讓使用者自己找到本 app 放行。
+     *
+     * 刻意**不用** `ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` ——
+     * 那個 intent 需要宣告 `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` 權限，
+     * 而 Google Play 對那個權限有一份明確的可接受用途白名單
+     * （鬧鐘、VoIP、裝置自動化…），「螢幕使用時間管理」不在上面。
+     * 為了省使用者兩次點擊而冒著整個 app 被拒絕的風險，不划算。
+     *
+     * 代價只有：使用者要自己在清單裡找到 mindgohua。
+     * 換來的是 manifest 少一條高風險權限。
+     *
+     * 注意 [isIgnoringBatteryOptimizations] 查詢狀態**本來就不需要任何權限**，
+     * 所以設定頁上的 ✔ / ！ 燈號完全不受影響。
+     */
+    fun batteryOptimizationIntent(context: Context): Intent =
+        Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
 
     /** Mode B 用。無障礙服務是否已啟用。 */
     fun isAccessibilityServiceEnabled(context: Context): Boolean {

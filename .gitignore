@@ -32,3 +32,6 @@ Thumbs.db
 # 個人學習筆記。只留在本機，不進版控 ——
 # 內容是寫給作者自己看的，不屬於專案的公開文件。
 notes/
+
+# Claude Code 的暫存與 agent worktree，不屬於專案
+.claude/

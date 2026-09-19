@@ -6,7 +6,18 @@
         隱私硬保證（spec §0.2）：本 app 刻意「不」宣告 android.permission.INTERNET。
         系統層級即無法連網 —— 請勿因為任何理由加回來。
         任何新增的第三方函式庫若需要 INTERNET，一律不得引入。
+
+        下面這一行不是宣告，是**強制移除**。
+
+        為什麼需要它：真正打包進 AAB 的是「合併後」的 manifest，而任何第三方
+        函式庫都能透過 manifest merger 把 INTERNET 注入進去。原本
+        PrivacyInvariantTest 只掃這個原始檔，那種注入它一個字都看不到 ——
+        測試會繼續顯示綠燈，而上架的 app 已經可以連網。
+
+        tools:node="remove" 讓 merger 無條件拔掉任何來源的 INTERNET，
+        把「靠人自律」換成「靠工具強制」。
     -->
+    <uses-permission android:name="android.permission.INTERNET" tools:node="remove" />
 
     <!-- Mode A：讀前景 app 事件流 -->
     <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS"
@@ -21,8 +32,18 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
-    <!-- ColorOS 殺後台對策：引導使用者放行電池最佳化 -->
-    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    <!--
+        這裡原本宣告 REQUEST_IGNORE_BATTERY_OPTIMIZATIONS，用來直接跳出
+        「要不要豁免這個 app」的系統對話框。已經刪掉。
+
+        理由：Google Play 對那個權限有一份明確的可接受用途白名單
+        （鬧鐘、VoIP、裝置自動化…），「螢幕使用時間管理」不在上面。
+        為了省使用者兩次點擊而冒著整個 app 被拒絕的風險，不划算。
+
+        改用免權限的 ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS 清單頁
+        （見 Permissions.batteryOptimizationIntent）。查詢豁免狀態用的是
+        PowerManager，本來就不需要任何權限，所以設定頁的燈號不受影響。
+    -->
 
     <!--
         讓設定頁能列出使用者可挑選的目標 app。
