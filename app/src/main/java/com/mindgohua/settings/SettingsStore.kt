@@ -68,10 +68,20 @@ class SettingsStore(private val context: Context) {
     suspend fun setEnabled(value: Boolean) = edit { it[Keys.ENABLED] = value }
     suspend fun setMode(value: DetectionMode) = edit { it[Keys.MODE] = value.name }
     suspend fun setTargets(value: Set<String>) = edit { it[Keys.TARGETS] = value }
-    suspend fun setThresholdSeconds(value: Int) = edit { it[Keys.THRESHOLD_SEC] = value.coerceIn(10, 7200) }
-    suspend fun setCooldownSeconds(value: Int) = edit { it[Keys.COOLDOWN_SEC] = value.coerceIn(0, 300) }
-    suspend fun setGraceMinutes(value: Int) = edit { it[Keys.GRACE_MIN] = value.coerceIn(0, 120) }
-    suspend fun setUnlockDelaySeconds(value: Int) = edit { it[Keys.UNLOCK_DELAY_SEC] = value.coerceIn(0, 30) }
+    // 範圍全部來自 SettingLimits —— 設定頁的對話框用的是同一份。
+    // 這裡曾經跟 UI 不一致（門檻 store 是 10..7200、UI 是 30..3600），
+    // 那種不一致不會當機，只會讓使用者輸入的數字悄悄變成別的。
+    suspend fun setThresholdSeconds(value: Int) =
+        edit { it[Keys.THRESHOLD_SEC] = value.clampTo(SettingLimits.THRESHOLD_SECONDS) }
+
+    suspend fun setCooldownSeconds(value: Int) =
+        edit { it[Keys.COOLDOWN_SEC] = value.clampTo(SettingLimits.COOLDOWN_SECONDS) }
+
+    suspend fun setGraceMinutes(value: Int) =
+        edit { it[Keys.GRACE_MIN] = value.clampTo(SettingLimits.GRACE_MINUTES) }
+
+    suspend fun setUnlockDelaySeconds(value: Int) =
+        edit { it[Keys.UNLOCK_DELAY_SEC] = value.clampTo(SettingLimits.UNLOCK_DELAY_SECONDS) }
     suspend fun setDiagnosticsNotification(value: Boolean) = edit { it[Keys.DIAGNOSTICS] = value }
     suspend fun setSurvivalAlertEnabled(value: Boolean) = edit { it[Keys.SURVIVAL_ALERT] = value }
     suspend fun setStatsEnabled(value: Boolean) = edit { it[Keys.STATS_ENABLED] = value }

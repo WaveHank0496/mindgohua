@@ -60,6 +60,7 @@ import com.mindgohua.detect.DetectorDebugBus
 import com.mindgohua.settings.AppSettings
 import com.mindgohua.settings.DetectionMode
 import com.mindgohua.settings.InstalledApps
+import com.mindgohua.settings.SettingLimits
 import com.mindgohua.stats.DayTotal
 import com.mindgohua.stats.SurvivalState
 import kotlinx.coroutines.delay
@@ -505,30 +506,34 @@ private fun ThresholdCard(settings: AppSettings, actions: ScreenActions) {
         )
         Text(
             "這個延遲是刻意的：秒點就消失的按鈕，兩週後會退化成反射動作。" +
-                "不過幾秒鐘就夠了 —— 真正有效的是「可以不進去」這個選項本身，不是讓你等更久。",
+                "研究顯示幾秒鐘就夠了 —— 真正有效的是「可以不進去」這個選項本身，" +
+                "不是讓你等更久。不過想給自己上重鎖的話，最多可以設到 3 分鐘。",
             fontSize = 12.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 
+    // 範圍全部來自 SettingLimits —— SettingsStore 存進去時夾的是同一份。
+    // 兩邊各寫一份數字的話，使用者輸入的值會悄悄變成別的，而且畫面上不會有錯誤。
     when (editing) {
         "threshold" -> DurationInputDialog(
             title = "連續使用超過多久打斷",
             initialSeconds = settings.thresholdSeconds,
-            minSeconds = 30,
-            maxSeconds = 3600,
+            minSeconds = SettingLimits.THRESHOLD_SECONDS.first,
+            maxSeconds = SettingLimits.THRESHOLD_SECONDS.last,
             presetSeconds = listOf(300, 600, 900, 1200, 1800),
             onDismiss = { editing = null },
             onConfirm = { v -> actions.onSettingsChange { it.setThresholdSeconds(v) } },
         )
 
+        // 上限放寬到 10 分鐘之後就不能只留秒欄了 ——
+        // 只有秒欄的話「10 分」這個值根本打不進去。
         "cooldown" -> DurationInputDialog(
             title = "切出去多久內回來算同一段",
             initialSeconds = settings.cooldownSeconds,
-            minSeconds = 0,
-            maxSeconds = 60,
-            showMinutesField = false,
-            presetSeconds = listOf(0, 5, 15, 30, 60),
+            minSeconds = SettingLimits.COOLDOWN_SECONDS.first,
+            maxSeconds = SettingLimits.COOLDOWN_SECONDS.last,
+            presetSeconds = listOf(0, 10, 30, 60, 300, 600),
             onDismiss = { editing = null },
             onConfirm = { v -> actions.onSettingsChange { it.setCooldownSeconds(v) } },
         )
@@ -536,8 +541,8 @@ private fun ThresholdCard(settings: AppSettings, actions: ScreenActions) {
         "grace" -> DurationInputDialog(
             title = "解除後多久內不再打斷",
             initialSeconds = settings.graceMinutes * 60,
-            minSeconds = 60,
-            maxSeconds = 30 * 60,
+            minSeconds = SettingLimits.GRACE_MINUTES.first * 60,
+            maxSeconds = SettingLimits.GRACE_MINUTES.last * 60,
             showSecondsField = false,
             presetSeconds = listOf(300, 600, 900, 1800),
             onDismiss = { editing = null },
@@ -545,12 +550,11 @@ private fun ThresholdCard(settings: AppSettings, actions: ScreenActions) {
         )
 
         "unlock" -> DurationInputDialog(
-            title = "貓出現後幾秒才能按按鈕",
+            title = "貓出現後多久才能按按鈕",
             initialSeconds = settings.unlockDelaySeconds,
-            minSeconds = 0,
-            maxSeconds = 10,
-            showMinutesField = false,
-            presetSeconds = listOf(0, 3, 5, 10),
+            minSeconds = SettingLimits.UNLOCK_DELAY_SECONDS.first,
+            maxSeconds = SettingLimits.UNLOCK_DELAY_SECONDS.last,
+            presetSeconds = listOf(0, 3, 10, 30, 60, 180),
             onDismiss = { editing = null },
             onConfirm = { v -> actions.onSettingsChange { it.setUnlockDelaySeconds(v) } },
         )

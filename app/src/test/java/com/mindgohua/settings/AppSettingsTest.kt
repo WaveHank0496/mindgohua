@@ -94,6 +94,38 @@ class AppSettingsTest {
         )
     }
 
+    // ---- 預設值必須落在使用者設得到的範圍內 ----
+
+    @Test
+    fun `每個預設值都落在自己的合法範圍內`() {
+        // 預設值掉出可設定範圍之外，會產生一個很難查的症狀：
+        // 使用者改掉之後**再也回不到預設值**，而且畫面上不會有任何錯誤。
+        assertTrue(
+            "門檻預設 ${defaults.thresholdSeconds} 不在 ${SettingLimits.THRESHOLD_SECONDS}",
+            defaults.thresholdSeconds in SettingLimits.THRESHOLD_SECONDS,
+        )
+        assertTrue(
+            "冷卻預設 ${defaults.cooldownSeconds} 不在 ${SettingLimits.COOLDOWN_SECONDS}",
+            defaults.cooldownSeconds in SettingLimits.COOLDOWN_SECONDS,
+        )
+        assertTrue(
+            "冷靜期預設 ${defaults.graceMinutes} 不在 ${SettingLimits.GRACE_MINUTES}",
+            defaults.graceMinutes in SettingLimits.GRACE_MINUTES,
+        )
+        assertTrue(
+            "解鎖延遲預設 ${defaults.unlockDelaySeconds} 不在 ${SettingLimits.UNLOCK_DELAY_SECONDS}",
+            defaults.unlockDelaySeconds in SettingLimits.UNLOCK_DELAY_SECONDS,
+        )
+    }
+
+    @Test
+    fun `夾範圍的行為符合預期`() {
+        assertEquals(30, 5.clampTo(SettingLimits.THRESHOLD_SECONDS))
+        assertEquals(3600, 99999.clampTo(SettingLimits.THRESHOLD_SECONDS))
+        assertEquals(180, 999.clampTo(SettingLimits.UNLOCK_DELAY_SECONDS))
+        assertEquals(600, 999.clampTo(SettingLimits.COOLDOWN_SECONDS))
+    }
+
     // ---- 單位換算 ----
     // 這裡錯了不會當機，只會讓門檻整整差 60 倍。
 
