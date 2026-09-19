@@ -17,7 +17,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
@@ -46,6 +48,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -397,6 +400,9 @@ private fun TargetAppsCard(
 
 @Composable
 private fun ThresholdCard(settings: AppSettings, actions: ScreenActions) {
+    // 哪一個項目正在編輯。null = 沒有對話框開著。
+    var editing by remember { mutableStateOf<String?>(null) }
+
     SectionCard("什麼時候打斷") {
         LabeledSlider(
             label = "連續使用超過",
@@ -408,6 +414,7 @@ private fun ThresholdCard(settings: AppSettings, actions: ScreenActions) {
                 val snapped = (v / 30f).roundToInt() * 30
                 actions.onSettingsChange { it.setThresholdSeconds(snapped) }
             },
+            onEditRequest = { editing = "threshold" },
         )
         LabeledSlider(
             label = "切出去多久內回來算同一段",
@@ -419,6 +426,7 @@ private fun ThresholdCard(settings: AppSettings, actions: ScreenActions) {
                 val snapped = (v / 5f).roundToInt() * 5
                 actions.onSettingsChange { it.setCooldownSeconds(snapped) }
             },
+            onEditRequest = { editing = "cooldown" },
         )
         Text(
             "切出去瞄一眼通知再切回來，不該把計時洗掉。",
@@ -432,6 +440,7 @@ private fun ThresholdCard(settings: AppSettings, actions: ScreenActions) {
             range = 1f..30f,
             steps = 28,
             onChange = { v -> actions.onSettingsChange { it.setGraceMinutes(v.roundToInt()) } },
+            onEditRequest = { editing = "grace" },
         )
         LabeledSlider(
             label = "貓出現後幾秒才能按按鈕",
@@ -440,11 +449,49 @@ private fun ThresholdCard(settings: AppSettings, actions: ScreenActions) {
             range = 0f..10f,
             steps = 9,
             onChange = { v -> actions.onSettingsChange { it.setUnlockDelaySeconds(v.roundToInt()) } },
+            // 範圍只有 0～10 秒，滑桿誤觸的代價很小，不值得多一個對話框。
         )
         Text(
             "這個延遲是刻意的：秒點就消失的按鈕，兩週後會退化成反射動作。",
             fontSize = 12.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            "點數字旁邊的 ✎ 可以直接用鍵盤輸入，不必拖滑桿。",
+            fontSize = 12.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+
+    when (editing) {
+        "threshold" -> DurationInputDialog(
+            title = "連續使用超過多久打斷",
+            initialSeconds = settings.thresholdSeconds,
+            minSeconds = 30,
+            maxSeconds = 3600,
+            showSecondsField = true,
+            onDismiss = { editing = null },
+            onConfirm = { v -> actions.onSettingsChange { it.setThresholdSeconds(v) } },
+        )
+
+        "cooldown" -> DurationInputDialog(
+            title = "切出去多久內回來算同一段",
+            initialSeconds = settings.cooldownSeconds,
+            minSeconds = 0,
+            maxSeconds = 60,
+            showSecondsField = true,
+            onDismiss = { editing = null },
+            onConfirm = { v -> actions.onSettingsChange { it.setCooldownSeconds(v) } },
+        )
+
+        "grace" -> DurationInputDialog(
+            title = "解除後多久內不再打斷",
+            initialSeconds = settings.graceMinutes * 60,
+            minSeconds = 60,
+            maxSeconds = 30 * 60,
+            showSecondsField = false,
+            onDismiss = { editing = null },
+            onConfirm = { v -> actions.onSettingsChange { it.setGraceMinutes(v / 60) } },
         )
     }
 }
@@ -509,11 +556,28 @@ private fun LabeledSlider(
     range: ClosedFloatingPointRange<Float>,
     steps: Int,
     onChange: (Float) -> Unit,
+    /** 點數字時要跳出的輸入對話框。給 null 表示這個項目不支援直接輸入。 */
+    onEditRequest: (() -> Unit)? = null,
 ) {
     Column(Modifier.fillMaxWidth()) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             Text(label, fontSize = 14.sp)
-            Text(valueText, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+            if (onEditRequest == null) {
+                Text(valueText, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+            } else {
+                // 數字做成按鈕，點了用鍵盤精確輸入。
+                // 滑桿留著做微調，但不再是唯一的入口 ——
+                // 捲動頁面時誤觸滑桿把門檻拖到 0，是實際發生過的問題。
+                TextButton(onClick = onEditRequest) {
+                    Text(valueText, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                    Spacer(Modifier.width(4.dp))
+                    Text("✎", fontSize = 13.sp, color = MaterialTheme.colorScheme.primary)
+                }
+            }
         }
         Slider(
             value = value.coerceIn(range.start, range.endInclusive),
@@ -522,6 +586,83 @@ private fun LabeledSlider(
             steps = steps,
         )
     }
+}
+
+/**
+ * 用鍵盤輸入一個時間值。
+ *
+ * 分、秒分成兩欄，因為門檻範圍是 30 秒～60 分鐘 ——
+ * 要使用者輸入「600 秒」而不是「10 分鐘」很不友善。
+ *
+ * 解析與驗證的規則全在 [DurationInput]（純函式、18 個單元測試），
+ * 這裡只負責把字串收進來、把結果送出去。
+ */
+@Composable
+private fun DurationInputDialog(
+    title: String,
+    initialSeconds: Int,
+    minSeconds: Int,
+    maxSeconds: Int,
+    showSecondsField: Boolean,
+    onDismiss: () -> Unit,
+    onConfirm: (Int) -> Unit,
+) {
+    var minutesText by remember { mutableStateOf((initialSeconds / 60).toString()) }
+    var secondsText by remember { mutableStateOf((initialSeconds % 60).toString()) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    OutlinedTextField(
+                        value = minutesText,
+                        onValueChange = { minutesText = it },
+                        label = { Text("分") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.weight(1f),
+                    )
+                    if (showSecondsField) {
+                        OutlinedTextField(
+                            value = secondsText,
+                            onValueChange = { secondsText = it },
+                            label = { Text("秒") },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                }
+                Text(
+                    "可輸入範圍：${minSeconds / 60} 分 ${minSeconds % 60} 秒 ～ ${maxSeconds / 60} 分 ${maxSeconds % 60} 秒",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                val parsed = DurationInput.parseMinutesSeconds(
+                    minutesText = minutesText,
+                    secondsText = if (showSecondsField) secondsText else "",
+                    minTotalSeconds = minSeconds,
+                    maxTotalSeconds = maxSeconds,
+                )
+                // 解析不出來就什麼都不改 —— 這正是這次要修掉的那種
+                // 「使用者沒想改，值卻變了」的情況。
+                if (parsed != null) onConfirm(parsed)
+                onDismiss()
+            }) { Text("確定") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("取消") }
+        },
+    )
 }
 
 @Composable
